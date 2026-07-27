@@ -40,7 +40,6 @@ const ICS_CHILDREN = [
 const NAV = [
     { to: "/", label: "Overview", icon: LayoutDashboard, testid: "nav-overview" },
     { label: "ICS Console", icon: LayoutList, testid: "nav-ics", children: ICS_CHILDREN, matchPath: "/ics" },
-    { to: "/invoices", label: "Invoices", icon: FileText, testid: "nav-invoices" },
     { to: "/customers", label: "Customers", icon: Users, testid: "nav-customers" },
     { to: "/suppliers", label: "Suppliers", icon: Truck, testid: "nav-suppliers" },
     { to: "/products", label: "Products", icon: Package, testid: "nav-products" },

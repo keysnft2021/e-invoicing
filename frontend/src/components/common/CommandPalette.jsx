@@ -45,9 +45,9 @@ export default function CommandPalette({ open, onOpenChange }) {
                         <LayoutDashboard className="mr-2 h-4 w-4" />
                         Dashboard
                     </CommandItem>
-                    <CommandItem onSelect={() => go("/invoices")}>
+                    <CommandItem onSelect={() => go("/ics/my-transaction")}>
                         <FileText className="mr-2 h-4 w-4" />
-                        Invoices
+                        My Transactions (ICS)
                     </CommandItem>
                     <CommandItem onSelect={() => go("/products")}>
                         <Package className="mr-2 h-4 w-4" />
