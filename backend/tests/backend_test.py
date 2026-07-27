@@ -47,6 +47,21 @@ def second_tenant_session():
     return s
 
 
+# ---------- Signing helpers ----------
+def _new_signing(session, action, entity_id, entity="invoice"):
+    r = session.post(f"{API}/signing/sessions",
+                     json={"action": action, "entity": entity, "entity_id": entity_id}, timeout=10)
+    assert r.status_code in (200, 201), r.text
+    d = r.json()
+    return d["session_id"], d["code"]
+
+
+def _approve_signing(session, sid, code):
+    r = session.post(f"{API}/signing/{sid}/approve", json={"code": code}, timeout=10)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 # ---------- Auth ----------
 def test_health():
     r = requests.get(f"{API}/health", timeout=10)
@@ -133,7 +148,9 @@ def test_invoice_lifecycle_validated(admin_session):
     assert inv.get("invoice_number", "").startswith("INV-"), inv.get("invoice_number")
     assert inv.get("total") is not None
 
-    r = admin_session.post(f"{API}/invoices/{inv_id}/submit", timeout=10)
+    sid, code = _new_signing(admin_session, "invoice.submit", inv_id)
+    _approve_signing(admin_session, sid, code)
+    r = admin_session.post(f"{API}/invoices/{inv_id}/submit", json={"signing_session_id": sid}, timeout=10)
     assert r.status_code in (200, 202), r.text
 
     # Poll for validation
@@ -165,7 +182,9 @@ def test_invoice_rejection_13_cents(admin_session):
     assert r.status_code in (200, 201), r.text
     inv_id = r.json()["id"]
 
-    r = admin_session.post(f"{API}/invoices/{inv_id}/submit", timeout=10)
+    sid, code = _new_signing(admin_session, "invoice.submit", inv_id)
+    _approve_signing(admin_session, sid, code)
+    r = admin_session.post(f"{API}/invoices/{inv_id}/submit", json={"signing_session_id": sid}, timeout=10)
     assert r.status_code in (200, 202)
 
     final = None
@@ -191,16 +210,27 @@ def test_invoice_cancel_after_validate(admin_session):
     }
     r = admin_session.post(f"{API}/invoices", json=payload, timeout=15)
     inv_id = r.json()["id"]
-    admin_session.post(f"{API}/invoices/{inv_id}/submit", timeout=10)
+    sid, code = _new_signing(admin_session, "invoice.submit", inv_id)
+    _approve_signing(admin_session, sid, code)
+    admin_session.post(f"{API}/invoices/{inv_id}/submit", json={"signing_session_id": sid}, timeout=10)
     for _ in range(20):
         time.sleep(0.5)
         cur = admin_session.get(f"{API}/invoices/{inv_id}").json()
         if cur.get("status") == "validated":
             break
+    # cancel without signing_session_id should fail (422 or 400)
+    r = admin_session.post(f"{API}/invoices/{inv_id}/cancel", json={"reason": "x"}, timeout=10)
+    assert r.status_code in (400, 422), f"cancel w/o signing should fail, got {r.status_code}"
     # cancel without reason should fail
-    r = admin_session.post(f"{API}/invoices/{inv_id}/cancel", json={}, timeout=10)
+    sid2, code2 = _new_signing(admin_session, "invoice.cancel", inv_id)
+    _approve_signing(admin_session, sid2, code2)
+    r = admin_session.post(f"{API}/invoices/{inv_id}/cancel", json={"signing_session_id": sid2}, timeout=10)
     assert r.status_code in (400, 422), f"cancel w/o reason should fail, got {r.status_code}"
-    r = admin_session.post(f"{API}/invoices/{inv_id}/cancel", json={"reason": "Test cancel"}, timeout=15)
+    # need fresh signing session since previous is now consumed? Actually it errored before consume.
+    # Approve check happens before consume, but consume_signing_session raises before reason validation... let's just create a fresh one.
+    sid3, code3 = _new_signing(admin_session, "invoice.cancel", inv_id)
+    _approve_signing(admin_session, sid3, code3)
+    r = admin_session.post(f"{API}/invoices/{inv_id}/cancel", json={"reason": "Test cancel", "signing_session_id": sid3}, timeout=15)
     assert r.status_code in (200, 202), r.text
     # Poll for cancelled
     for _ in range(10):

@@ -6,6 +6,7 @@ import api, { formatApiError } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
 import StatusChip from "@/components/common/StatusChip";
 import Timeline from "@/components/common/Timeline";
+import SigningGate from "@/components/common/SigningGate";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -34,32 +35,49 @@ export default function InvoiceDetail() {
     });
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [gateOpen, setGateOpen] = useState(false);
+    const [gateAction, setGateAction] = useState(null); // 'submit' | 'cancel'
 
     if (isLoading || !inv) return <Skeleton className="h-64 w-full" />;
 
-    const submit = async () => {
+    const openSubmitGate = () => {
+        setGateAction("submit");
+        setGateOpen(true);
+    };
+    const openCancelGate = () => {
+        if (!reason.trim()) return toast.error("Reason is required");
+        setGateAction("cancel");
+        setGateOpen(true);
+    };
+
+    const runSubmit = async (sessionId) => {
         setBusy(true);
         try {
-            await api.post(`/invoices/${id}/submit`);
-            toast.info("Submitted to LHDN — validating…");
+            await api.post(`/invoices/${id}/submit`, { signing_session_id: sessionId });
+            toast.info("Signed & submitted to LHDN — validating…");
             qc.invalidateQueries({ queryKey: ["invoice", id] });
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
             setBusy(false);
+            setGateOpen(false);
         }
     };
-    const cancel = async () => {
-        if (!reason.trim()) return toast.error("Reason is required");
+    const runCancel = async (sessionId) => {
         setBusy(true);
         try {
-            await api.post(`/invoices/${id}/cancel`, { reason });
+            await api.post(`/invoices/${id}/cancel`, {
+                reason, signing_session_id: sessionId,
+            });
             toast.success("Invoice cancelled");
             qc.invalidateQueries({ queryKey: ["invoice", id] });
+            setCancelOpen(false);
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
             setBusy(false);
+            setGateOpen(false);
         }
     };
 
@@ -93,13 +111,13 @@ export default function InvoiceDetail() {
                 actions={
                     <>
                         {canSubmit && (
-                            <Button onClick={submit} disabled={busy} data-testid="detail-submit-btn">
+                            <Button onClick={openSubmitGate} disabled={busy} data-testid="detail-submit-btn">
                                 <Send className="mr-2 h-4 w-4" />
                                 Submit to LHDN
                             </Button>
                         )}
                         {canCancel && (
-                            <Dialog>
+                            <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" data-testid="detail-cancel-btn">
                                         <XCircle className="mr-2 h-4 w-4" />
@@ -113,7 +131,7 @@ export default function InvoiceDetail() {
                                     <div className="space-y-2">
                                         <div className="text-sm text-muted-foreground">
                                             Provide a reason for cancellation. This will be sent to
-                                            LHDN MyInvois.
+                                            LHDN MyInvois after step-up approval.
                                         </div>
                                         <Textarea
                                             value={reason}
@@ -125,11 +143,11 @@ export default function InvoiceDetail() {
                                     <DialogFooter>
                                         <Button
                                             variant="destructive"
-                                            onClick={cancel}
+                                            onClick={openCancelGate}
                                             disabled={busy}
                                             data-testid="confirm-cancel-btn"
                                         >
-                                            Confirm cancellation
+                                            Continue to approval
                                         </Button>
                                     </DialogFooter>
                                 </DialogContent>
@@ -137,6 +155,21 @@ export default function InvoiceDetail() {
                         )}
                     </>
                 }
+            />
+
+            <SigningGate
+                open={gateOpen}
+                onOpenChange={setGateOpen}
+                action={gateAction === "submit" ? "invoice.submit" : "invoice.cancel"}
+                entity="invoice"
+                entityId={id}
+                title={gateAction === "submit" ? "Approve LHDN submission" : "Approve cancellation"}
+                description={
+                    gateAction === "submit"
+                        ? `You are about to sign & submit invoice ${inv.invoice_number} to LHDN MyInvois.`
+                        : `You are about to cancel invoice ${inv.invoice_number} on LHDN MyInvois.`
+                }
+                onApproved={(sid) => (gateAction === "submit" ? runSubmit(sid) : runCancel(sid))}
             />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

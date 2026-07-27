@@ -19,6 +19,8 @@ from routes.dashboard import router as dashboard_router
 from routes.mytax import router as mytax_router
 from routes.admin import router as admin_router
 from routes.audit_route import router as audit_router
+from routes.signing import router as signing_router
+from routes.gov_config import router as gov_config_router
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -61,5 +63,6 @@ async def health():
 
 
 for r in [auth_router, companies_router, masters_router, invoices_router,
-          dashboard_router, mytax_router, admin_router, audit_router]:
+          dashboard_router, mytax_router, admin_router, audit_router,
+          signing_router, gov_config_router]:
     app.include_router(r)

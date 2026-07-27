@@ -6,8 +6,9 @@ from bson import ObjectId
 from typing import List, Optional
 
 from deps import get_db, require_tenant
-from adapters import get_adapter
+from adapters import resolve_adapter
 from audit import audit
+from routes.signing import consume_signing_session
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -43,6 +44,11 @@ class InvoiceIn(BaseModel):
 
 class CancelBody(BaseModel):
     reason: str
+    signing_session_id: str
+
+
+class SubmitBody(BaseModel):
+    signing_session_id: str
 
 
 def _calc_totals(lines, shipping=0, charges=0, round_off=0):
@@ -154,14 +160,14 @@ async def update_invoice(iid: str, body: InvoiceIn, ctx=Depends(require_tenant))
     return _s(doc)
 
 
-async def _submit_task(invoice_id: str):
+async def _submit_task(invoice_id: str, tenant_id: str):
     """Background task: submit to gov adapter, update invoice with result."""
     from deps import get_db as _gd
     db = _gd()
     doc = await db.invoices.find_one({"_id": ObjectId(invoice_id)})
     if not doc:
         return
-    adapter = get_adapter(doc.get("country", "MY"))
+    adapter = await resolve_adapter(doc.get("country", "MY"), db)
     payload = {"invoice_number": doc["invoice_number"], "total": doc["total"],
                "tax_total": doc["tax_total"], "customer": doc.get("customer_snapshot", {}),
                "lines": doc["lines"]}
@@ -191,23 +197,32 @@ async def _submit_task(invoice_id: str):
 
 
 @router.post("/{iid}/submit")
-async def submit_invoice(iid: str, bg: BackgroundTasks, ctx=Depends(require_tenant)):
+async def submit_invoice(iid: str, body: SubmitBody, bg: BackgroundTasks,
+                          ctx=Depends(require_tenant)):
     db = get_db()
     doc = await db.invoices.find_one({"_id": ObjectId(iid), "tenant_id": ctx["tenant_id"]})
     if not doc:
         raise HTTPException(404, "Invoice not found")
     if doc["status"] not in ("draft", "rejected"):
         raise HTTPException(400, f"Cannot submit invoice in status {doc['status']}")
+    # Step-up MFA gate
+    await consume_signing_session(db, session_id=body.signing_session_id,
+                                    tenant_id=ctx["tenant_id"],
+                                    expected_action="invoice.submit",
+                                    expected_entity_id=iid)
     now = datetime.now(timezone.utc).isoformat()
     timeline = doc.get("timeline", [])
-    timeline.append({"status": "submitting", "note": "Queued for LHDN MyInvois submission",
+    timeline.append({"status": "submitting", "note": "Queued for LHDN MyInvois submission (signed)",
                       "actor": ctx["user"]["email"], "at": now})
     await db.invoices.update_one({"_id": ObjectId(iid)},
-        {"$set": {"status": "submitting", "timeline": timeline, "updated_at": now}})
-    bg.add_task(_submit_task, iid)
+        {"$set": {"status": "submitting", "timeline": timeline, "updated_at": now,
+                   "signing_session_id": body.signing_session_id}})
+    bg.add_task(_submit_task, iid, ctx["tenant_id"])
     await audit(db, tenant_id=ctx["tenant_id"], actor_id=ctx["user"]["id"],
                 actor_email=ctx["user"]["email"], action="invoice.submit",
-                entity="invoice", entity_id=iid, meta={"number": doc["invoice_number"]})
+                entity="invoice", entity_id=iid,
+                meta={"number": doc["invoice_number"],
+                       "signing_session_id": body.signing_session_id})
     doc = await db.invoices.find_one({"_id": ObjectId(iid)})
     return _s(doc)
 
@@ -220,7 +235,12 @@ async def cancel_invoice(iid: str, body: CancelBody, ctx=Depends(require_tenant)
         raise HTTPException(404, "Invoice not found")
     if doc["status"] not in ("validated", "submitted"):
         raise HTTPException(400, f"Cannot cancel invoice in status {doc['status']}")
-    adapter = get_adapter(doc.get("country", "MY"))
+    # Step-up MFA gate
+    await consume_signing_session(db, session_id=body.signing_session_id,
+                                    tenant_id=ctx["tenant_id"],
+                                    expected_action="invoice.cancel",
+                                    expected_entity_id=iid)
+    adapter = await resolve_adapter(doc.get("country", "MY"), db)
     gov_uuid = doc.get("government", {}).get("uuid", "")
     result = await adapter.cancel_invoice(gov_uuid, body.reason)
     now = datetime.now(timezone.utc).isoformat()
@@ -232,7 +252,8 @@ async def cancel_invoice(iid: str, body: CancelBody, ctx=Depends(require_tenant)
                    "timeline": timeline, "updated_at": now}})
     await audit(db, tenant_id=ctx["tenant_id"], actor_id=ctx["user"]["id"],
                 actor_email=ctx["user"]["email"], action="invoice.cancel",
-                entity="invoice", entity_id=iid, meta={"reason": body.reason})
+                entity="invoice", entity_id=iid,
+                meta={"reason": body.reason, "signing_session_id": body.signing_session_id})
     doc = await db.invoices.find_one({"_id": ObjectId(iid)})
     return _s(doc)
 

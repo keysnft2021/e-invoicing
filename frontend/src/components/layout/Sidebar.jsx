@@ -18,6 +18,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
     Sparkles,
+    KeyRound,
 } from "lucide-react";
 
 const NAV = [
@@ -27,6 +28,7 @@ const NAV = [
     { to: "/suppliers", label: "Suppliers", icon: Truck, testid: "nav-suppliers" },
     { to: "/products", label: "Products", icon: Package, testid: "nav-products" },
     { to: "/mytax", label: "MyTax / MyInvois", icon: Landmark, testid: "nav-mytax" },
+    { to: "/gov-config", label: "Gov API Config", icon: KeyRound, testid: "nav-gov-config" },
     { to: "/companies", label: "Companies", icon: Building2, testid: "nav-companies" },
     { to: "/users", label: "Users", icon: UserCog, testid: "nav-users" },
     { to: "/roles", label: "Roles & RBAC", icon: ShieldCheck, testid: "nav-roles" },

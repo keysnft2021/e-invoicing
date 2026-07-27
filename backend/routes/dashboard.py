@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
 from deps import get_db, require_tenant
-from adapters import get_adapter, list_adapters
+from adapters import get_adapter, list_adapters_with_status
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -52,16 +52,18 @@ async def stats(ctx=Depends(require_tenant)):
         "success_rate": success_rate,
         "tax_collected": tax_collected,
         "trend": trend,
-        "adapters": list_adapters(),
+        "adapters": await list_adapters_with_status(db),
     }
 
 
 @router.get("/health")
 async def health(ctx=Depends(require_tenant)):
+    db = get_db()
     my = await get_adapter("MY").health_check()
     return {
         "server": {"healthy": True, "uptime": "ok"},
         "database": {"healthy": True},
         "storage": {"healthy": True},
         "adapters": [my],
+        "adapter_modes": await list_adapters_with_status(db),
     }

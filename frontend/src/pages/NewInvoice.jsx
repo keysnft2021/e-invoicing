@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
+import SigningGate from "@/components/common/SigningGate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +42,8 @@ export default function NewInvoice() {
         { description: "", quantity: 1, unit_price: 0, tax_rate: 6, discount: 0, product_id: null },
     ]);
     const [submitting, setSubmitting] = useState(false);
+    const [gateOpen, setGateOpen] = useState(false);
+    const [createdInvoiceId, setCreatedInvoiceId] = useState(null);
 
     useEffect(() => {
         if (customers?.length && !customerId) setCustomerId(customers[0].id);
@@ -103,14 +106,31 @@ export default function NewInvoice() {
             const { data } = await api.post("/invoices", payload);
             toast.success(`Invoice ${data.invoice_number} created`);
             if (thenSubmit) {
-                await api.post(`/invoices/${data.id}/submit`);
-                toast.info("Submitted to LHDN MyInvois — validating…");
+                // Step-up MFA gate required for gov submission
+                setCreatedInvoiceId(data.id);
+                setGateOpen(true);
+            } else {
+                nav(`/invoices/${data.id}`);
             }
-            nav(`/invoices/${data.id}`);
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const doSubmit = async (sessionId) => {
+        if (!createdInvoiceId) return;
+        try {
+            await api.post(`/invoices/${createdInvoiceId}/submit`, {
+                signing_session_id: sessionId,
+            });
+            toast.info("Signed & submitted to LHDN MyInvois — validating…");
+            nav(`/invoices/${createdInvoiceId}`);
+        } catch (e) {
+            toast.error(formatApiError(e));
+        } finally {
+            setGateOpen(false);
         }
     };
 
@@ -140,6 +160,17 @@ export default function NewInvoice() {
                         </Button>
                     </>
                 }
+            />
+
+            <SigningGate
+                open={gateOpen}
+                onOpenChange={setGateOpen}
+                action="invoice.submit"
+                entity="invoice"
+                entityId={createdInvoiceId}
+                title="Approve LHDN submission"
+                description="You are about to sign & submit this invoice to LHDN MyInvois. Scan the QR or enter the 6-digit code to approve."
+                onApproved={doSubmit}
             />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

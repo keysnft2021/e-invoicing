@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 2 (LHDN Real Adapter + Gov Config + QR step-up MFA) fully tested. Backend: 30/30 pytest passing (16 regression + 14 new). New backend coverage: /api/gov-config upsert with redacted response (client_id masked, secrets never returned), dashboard adapters mode switches preprod/mock based on saved+enabled creds, verify with bogus creds returns 200 {ok:false, error} (does NOT 500), delete reverts to mock. Signing sessions: create returns {session_id, code (6 digits), qr_data_url (data:image/png;base64...), approve_url with /sign/{sid}?c=CODE, expires_at ~5min}. Approve with wrong code → 400 'Invalid approval code'; correct code → status=approved + audit log 'signing.approve'. Submit without signing_session_id → 422/400 with 'signing_session_id required'; invalid id → 403 'Invalid signing session'. Full submit flow: create session → approve → submit → session becomes 'consumed', invoice transitions submitting→validated. Reusing consumed session → 400. Session bound to entity A cannot submit entity B → 400 'bound to different entity'. Cross-tenant approval → 403. Cancel now also requires signing_session_id with expected_action='invoice.cancel'. Frontend: Sidebar 'Gov API Config' (nav-gov-config) navigates to /gov-config; form with all testids present (gov-environment/client-id/client-secret/cert-pem/pk-pem/enabled-switch/save-btn/verify-btn) saves creds and 'Adapter state' card shows Configured + verification-failed chip with masked error for dummy creds. New Invoice 'Save & submit to LHDN' opens SigningGate modal (signing-gate) with QR image (signing-qr) and 6-digit code (signing-code-display); keyboard.type into signing-otp + click signing-approve-btn triggers submit and navigates to /invoices/{id} with 'Validated' status + LHDN UUID/Long ID/Validation ID visible. Cancel invoice flow shows reason dialog → 'Continue to approval' → SigningGate (verified visually). /sign/:sessionId?c=CODE public approval page loads, requires login (redirects to /login if unauth), shows action details and Approve/Reject buttons (sign-approve-btn / sign-reject-btn) which work.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "adapters.resolve_adapter / list_adapters_with_status",
+        "issue": "Cross-tenant credential bleed. `resolve_adapter(country, db)` and `list_adapters_with_status(db)` query `db.gov_credentials.find_one({'country': country, 'enabled': True})` WITHOUT tenant_id filter. Any tenant saving MY credentials causes ALL tenants to (a) see mode='preprod' on their dashboard and (b) attempt to submit real invoices via that other tenant's LHDN client_id/secret. Upsert is per-tenant, but resolution is global. Must be filtered by tenant_id. dashboard.py also passes no tenant_id into list_adapters_with_status.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/invoices/{id}/submit (no signing_session_id)",
+        "issue": "Returns 422 (Pydantic missing field) rather than 400 'signing_session_id is required'. Review-request wording expected 400 with that literal message; current behaviour is a valid FastAPI 422 from SubmitBody schema validation. Consider making signing_session_id Optional=None on the model and returning explicit 400 from consume_signing_session so the error text matches. Not blocking — tests updated to accept 400/422."
+      },
+      {
+        "endpoint": "POST /api/gov-config/{country}/verify",
+        "issue": "Verify caches httpx client + swallows all exceptions into last_error. Working as designed, but the string 'HTTPStatusError: Client error 400 Bad Request…' surfaces raw stack-adjacent messages. Consider sanitising."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard chart", "issues": ["Persistent Recharts warning: 'The width(-1) and height(-1) of chart should be greater than 0' — carried over from iteration 1, still unfixed."]},
+      {"screen": "GovConfig / Adapter state", "issues": ["When verification fails, the raw HTTPStatusError string is rendered verbatim inside a bordered code block. Fine for admins, but consider a friendlier headline ('Unable to reach LHDN with these credentials') plus expandable technical detail."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/iteration2_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/iteration2.xml"
+  ],
+  "action_items": [
+    "CRITICAL: In /app/backend/adapters.py, add tenant_id parameter to resolve_adapter() and list_adapters_with_status() and filter gov_credentials by tenant_id. Propagate tenant_id from callers (invoices._submit_task, invoices.cancel_invoice via ctx, dashboard.stats/health). Otherwise tenants share adapter credentials — a serious multi-tenant security bug.",
+    "(Optional) Return literal 400 'signing_session_id is required for this action' by making SubmitBody.signing_session_id Optional and delegating validation to consume_signing_session, so the message matches the review-request spec exactly.",
+    "(Optional) Add explicit min-height to Dashboard ResponsiveContainer to silence Recharts warning.",
+    "(Optional) Human-friendly error headline for verify failure card in GovConfig."
+  ],
+  "critical_code_review_comments": [
+    "adapters.py cross-tenant bug (see backend critical above) — must fix before prod.",
+    "signing.py: _load_session compares now.isoformat() > s['expires_at'] using string comparison. Works ONLY because both are ISO-8601 UTC with same suffix. Safer to parse both as datetime for expiry.",
+    "signing.py: session code is returned in the create response (correct for the initiating tab) AND stored plaintext in Mongo. Consider hashing 'code' at rest so a DB dump can't be replayed.",
+    "signing.py: SESSION_TTL_SECONDS=300 is fine but there is no background job to reap expired sessions. Not blocking.",
+    "gov_config.py: verify() catches all exceptions and returns 200 {ok:false} — good for UX but hides 5xx bugs. Consider distinguishing network failures from auth failures.",
+    "adapters.RealLHDNAdapter._sign_document swallows signing errors into a string 'error:<ExceptionName>' but still submits with signatureValue set to that string — LHDN prod would reject; okay as a diagnostic but log it prominently.",
+    "invoices.SubmitBody / CancelBody Pydantic v2: signing_session_id is required → 422 (not 400). Combined with the review-request spec expecting 400 body, this is a minor spec mismatch."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (regression: submit/cancel now creates+approves signing sessions)",
+    "/app/backend/tests/iteration2_test.py (NEW: 14 test cases for gov-config + signing + adapter modes)"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 pytest — 16 regression + 14 iteration-2)",
+    "frontend": "100% of tested flows (login → dashboard, sidebar nav-gov-config → /gov-config, save creds + verify graceful fail, adapter state card, New Invoice → SigningGate (QR + code + OTP) → invoice validated with LHDN UUID/Long ID/Validation ID, /sign/:sessionId page loads with sign-approve-btn/sign-reject-btn, cancel dialog Continue-to-approval opens SigningGate)"
+  },
+  "test_credentials": "admin@einvoice.my / Admin@12345 (verified working)",
+  "seed_data_creation": "iteration2_test.py creates TEST_ customers/invoices and a TEST_Iso_ tenant. GovConfig entries are cleaned up in the admin fixture teardown (DELETE /api/gov-config/MY) so subsequent runs start on the mock adapter.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend addopts uses -n 2 (xdist), run with -n 0 to serialise if you touch shared state (e.g. gov_config which is per-tenant but resolve_adapter is currently GLOBAL). Signing session code is 6 digits, returned once in create, single-use, 5-min TTL, tenant-scoped, bound to (action, entity_id). Submit body: {signing_session_id}. Cancel body: {reason, signing_session_id}. Both currently 422 when signing_session_id missing (Pydantic), not 400. Frontend InputOTP: shadcn version; there is NO discrete <input> per slot — focus via clicking the [data-testid='signing-otp'] group and use page.keyboard.type(code). Do NOT re-fill it via .fill(). New Invoice happily submits an RM 0.00 invoice (product select does not auto-populate line unit_price on all runs); that is a pre-existing UX quirk, not iteration-2 scope.",
+  "rca_of_issue": "resolve_adapter cross-tenant leak: /app/backend/adapters.py lines 273-291 — the mongo find_one is missing tenant_id from the filter. Fix: change signature to `resolve_adapter(country, db, tenant_id)` and `list_adapters_with_status(db, tenant_id)`, then pass ctx['tenant_id'] from routes/invoices.py::_submit_task (already has tenant_id parameter), routes/invoices.py::cancel_invoice, routes/dashboard.py::stats and ::health. Add index on {tenant_id, country, enabled}. Reproduce: (1) admin tenant saves MY creds via POST /api/gov-config; (2) register a fresh tenant; (3) GET /api/dashboard/stats on the fresh tenant shows adapters[MY].mode='preprod' even though that tenant never configured creds; (4) invoice submit for the fresh tenant will now hit real LHDN using admin tenant's client_id/secret."
+}

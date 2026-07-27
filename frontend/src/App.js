@@ -17,6 +17,8 @@ import RolesPage from "@/pages/RolesPage";
 import MyTax from "@/pages/MyTax";
 import AuditLog from "@/pages/AuditLog";
 import Settings from "@/pages/Settings";
+import GovConfig from "@/pages/GovConfig";
+import SignApprove from "@/pages/SignApprove";
 import "@/App.css";
 
 export default function App() {
@@ -27,6 +29,7 @@ export default function App() {
                     <Toaster richColors position="top-right" />
                     <Routes>
                         <Route path="/login" element={<Login />} />
+                        <Route path="/sign/:sessionId" element={<SignApprove />} />
                         <Route element={<AppShell />}>
                             <Route path="/" element={<Dashboard />} />
                             <Route path="/invoices" element={<Invoices />} />
@@ -39,6 +42,7 @@ export default function App() {
                             <Route path="/users" element={<Users />} />
                             <Route path="/roles" element={<RolesPage />} />
                             <Route path="/mytax" element={<MyTax />} />
+                            <Route path="/gov-config" element={<GovConfig />} />
                             <Route path="/audit" element={<AuditLog />} />
                             <Route path="/settings" element={<Settings />} />
                         </Route>
