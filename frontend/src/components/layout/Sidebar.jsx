@@ -1,5 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
@@ -20,11 +20,26 @@ import {
     Sparkles,
     KeyRound,
     LayoutList,
+    ChevronRight,
+    ChevronDown,
+    Wallet,
+    FileArchive,
+    BarChart3,
+    Info,
 } from "lucide-react";
+
+const ICS_CHILDREN = [
+    { to: "/ics", end: true, label: "Dashboard", icon: Wallet, testid: "ics-nav-dashboard" },
+    { to: "/ics/my-transaction", label: "My Transaction", icon: FileArchive, testid: "ics-nav-transaction" },
+    { to: "/ics/consolidated", label: "Consolidated Task", icon: FileArchive, testid: "ics-nav-consolidated" },
+    { to: "/ics/fiscal-document", label: "My Fiscal Document", icon: FileArchive, testid: "ics-nav-fiscal" },
+    { to: "/ics/reports", label: "Reports", icon: BarChart3, testid: "ics-nav-reports" },
+    { to: "/ics/basic-info", label: "Basic Info", icon: Info, testid: "ics-nav-basic" },
+];
 
 const NAV = [
     { to: "/", label: "Overview", icon: LayoutDashboard, testid: "nav-overview" },
-    { to: "/ics", label: "ICS Console", icon: LayoutList, testid: "nav-ics" },
+    { label: "ICS Console", icon: LayoutList, testid: "nav-ics", children: ICS_CHILDREN, matchPath: "/ics" },
     { to: "/invoices", label: "Invoices", icon: FileText, testid: "nav-invoices" },
     { to: "/customers", label: "Customers", icon: Users, testid: "nav-customers" },
     { to: "/suppliers", label: "Suppliers", icon: Truck, testid: "nav-suppliers" },
@@ -40,9 +55,27 @@ const NAV = [
 
 export default function Sidebar() {
     const [collapsed, setCollapsed] = useState(false);
+    const [openGroups, setOpenGroups] = useState({});
     const { user } = useAuth();
     const { current } = useCompany();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Auto-open a group when we're on one of its child routes
+    useEffect(() => {
+        const next = { ...openGroups };
+        let changed = false;
+        NAV.forEach((n) => {
+            if (n.children && n.matchPath && location.pathname.startsWith(n.matchPath) && !next[n.label]) {
+                next[n.label] = true;
+                changed = true;
+            }
+        });
+        if (changed) setOpenGroups(next);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.pathname]);
+
+    const toggleGroup = (label) => setOpenGroups((s) => ({ ...s, [label]: !s[label] }));
 
     return (
         <aside
@@ -83,25 +116,83 @@ export default function Sidebar() {
             )}
 
             <nav className="flex-1 overflow-y-auto py-3">
-                {NAV.map((n) => (
-                    <NavLink
-                        key={n.to}
-                        to={n.to}
-                        end={n.to === "/"}
-                        data-testid={n.testid}
-                        className={({ isActive }) =>
-                            cn(
-                                "mx-2 my-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                                isActive
-                                    ? "bg-foreground text-background"
-                                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                            )
-                        }
-                    >
-                        <n.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{n.label}</span>}
-                    </NavLink>
-                ))}
+                {NAV.map((n) => {
+                    if (n.children) {
+                        const isOpen = !!openGroups[n.label] || (n.matchPath && location.pathname.startsWith(n.matchPath));
+                        const groupActive = n.matchPath && location.pathname.startsWith(n.matchPath);
+                        return (
+                            <div key={n.label}>
+                                <button
+                                    type="button"
+                                    data-testid={n.testid}
+                                    onClick={() => {
+                                        if (collapsed) return;
+                                        toggleGroup(n.label);
+                                        if (!groupActive) navigate(n.children[0].to);
+                                    }}
+                                    className={cn(
+                                        "mx-2 my-0.5 flex w-[calc(100%-16px)] items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                                        groupActive
+                                            ? "bg-foreground text-background"
+                                            : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                                    )}
+                                >
+                                    <span className="flex items-center gap-3">
+                                        <n.icon className="h-4 w-4 shrink-0" />
+                                        {!collapsed && <span>{n.label}</span>}
+                                    </span>
+                                    {!collapsed && (
+                                        isOpen
+                                            ? <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                                            : <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                                    )}
+                                </button>
+                                {!collapsed && isOpen && (
+                                    <div className="ml-4 border-l border-border/60 pl-2">
+                                        {n.children.map((c) => (
+                                            <NavLink
+                                                key={c.to}
+                                                to={c.to}
+                                                end={c.end}
+                                                data-testid={c.testid}
+                                                className={({ isActive }) =>
+                                                    cn(
+                                                        "mx-2 my-0.5 flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                                                        isActive
+                                                            ? "bg-secondary text-foreground font-medium"
+                                                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                                                    )
+                                                }
+                                            >
+                                                <c.icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                                                <span>{c.label}</span>
+                                            </NavLink>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
+                    return (
+                        <NavLink
+                            key={n.to}
+                            to={n.to}
+                            end={n.to === "/"}
+                            data-testid={n.testid}
+                            className={({ isActive }) =>
+                                cn(
+                                    "mx-2 my-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                                    isActive
+                                        ? "bg-foreground text-background"
+                                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                                )
+                            }
+                        >
+                            <n.icon className="h-4 w-4 shrink-0" />
+                            {!collapsed && <span>{n.label}</span>}
+                        </NavLink>
+                    );
+                })}
             </nav>
 
             <div className="border-t border-border p-3">
