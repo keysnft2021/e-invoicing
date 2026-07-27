@@ -1,0 +1,46 @@
+{
+  "summary": "First MVP test iteration. Backend: 16/16 pytest cases passing (auth, dashboard stats, companies, customers/products, invoice lifecycle w/ LHDN validation & QR, .13 deterministic rejection, cancel-with-reason, MyTax role-app approve/reject flow, representatives default doc.view permission, intermediary date-range validation & doc_view default, users CRUD tenant inheritance, 17 roles catalog, audit grows, multi-tenant isolation across two tenants). Frontend: login lands on Dashboard with live stats (today/validated/rejected/total value/adapters), sidebar nav-* all present and navigate correctly, Cmd+K palette opens with cmd-new-invoice routing to /invoices/new, full New Invoice flow works — select customer, pick product auto-fills desc/price, Save & submit to LHDN transitions invoice to Validated with LHDN UUID + Long ID + Validation ID visible on detail page. Theme toggle removes 'dark' class. MyTax dialog opens with correct testids (ra-role-type/id-no/name/save-btn).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "NewInvoice", "issues": ["'Invoice date' and 'Due date' use the browser's default HTML5 date picker (input type=date with native calendar icon) instead of the shadcn Calendar/Popover component used elsewhere. Recommend switching to shadcn calendar for consistency."]},
+      {"screen": "InvoiceDetail", "issues": ["Section is labelled 'Lifecycle' but the review request/product spec refers to it as 'Timeline'. Functionally equivalent — consider renaming for consistency."]},
+      {"screen": "Global (Dialogs)", "issues": ["Console warnings: `DialogContent` requires a `DialogTitle` for screen readers and is missing `aria-describedby`. Accessibility gap on Command Palette and MyTax dialogs."]},
+      {"screen": "Dashboard chart", "issues": ["Recharts warning on initial render: 'The width(-1) and height(-1) of chart should be greater than 0' — set explicit min-height on ResponsiveContainer parent."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Replace native HTML5 date input in NewInvoice with shadcn Calendar for design consistency.",
+    "(Optional) Add DialogTitle + aria-describedby to Command Palette and MyTax dialogs to silence a11y warnings.",
+    "(Optional) Add ResponsiveContainer min-height on Dashboard trend chart to remove Recharts width(-1)/height(-1) warning.",
+    "(Optional) Consider renaming InvoiceDetail 'Lifecycle' -> 'Timeline' to match spec terminology."
+  ],
+  "critical_code_review_comments": [
+    "server-side field naming: MyTax role-application backend uses `identification_no`/`applicant_name`/`applicant_email` while frontend testids are `ra-id-no`/`ra-name` — verify the frontend form maps to the correct backend fields (it does, but the naming divergence is confusing for API consumers).",
+    "Invoice submission uses FastAPI BackgroundTasks — poll interval OK; consider WebSocket / SSE for future real-time timeline updates.",
+    "seed.py + bcrypt: login endpoints working, JWT + Bearer auth verified.",
+    "MongoDB ObjectId is correctly stripped (`_s()` helper) across mytax and other routes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16)",
+    "frontend": "100% of tested flows (login, dashboard, sidebar navigation to 10 sections, command palette, new invoice creation + LHDN submission + validation with UUID, theme toggle, MyTax dialog)"
+  },
+  "test_credentials": "admin@einvoice.my / Admin@12345 (verified working)",
+  "seed_data_creation": "Tests create TEST_-prefixed companies/customers/invoices and a second tenant TEST_Org_* via /api/auth/register. Not cleaned up (idempotent registration each run creates a fresh tenant).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend field naming to remember: /api/invoices requires invoice_date (YYYY-MM-DD). /api/mytax/role-applications requires role_type (from ROLE_TYPES list: employer, company_director, tax_agent_admin_firm, representative_non_able, lawyer, estate_administrator), identification_no, applicant_name, applicant_email. /api/mytax/representatives requires identification_no (not id_no). /api/auth/register uses tenant_name (not org_name). Cancel invoice requires {reason: str}. Second-tenant registration via /api/auth/register successfully isolates data — verified admin cannot see foreign invoices.",
+  "rca_of_issues": "No critical bugs found. Design-only observations documented above."
+}
