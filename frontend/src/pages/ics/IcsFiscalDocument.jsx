@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import api, { formatApiError } from "@/lib/api";
+import api, { formatApiError, API_BASE } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
 import StatusChip from "@/components/common/StatusChip";
 import { Button } from "@/components/ui/button";
@@ -160,9 +160,14 @@ function DocumentPanel({ kind }) {
     const share = () => {
         const id = one();
         if (!id) return toast.error("Select exactly one row");
-        const url = `${window.location.origin}/invoices/${id}`;
+        const url = `${API_BASE}/invoices/${id}/pdf`;
         navigator.clipboard.writeText(url);
-        toast.success("Invoice link copied — share via email or chat");
+        toast.success("PDF link copied — the invoice PDF opens in-browser");
+    };
+    const openPdf = () => {
+        const id = one();
+        if (!id) return toast.error("Select exactly one row");
+        window.open(`${API_BASE}/invoices/${id}/pdf`, "_blank");
     };
 
     const exportCsv = (qrOnly = false) => {
@@ -315,8 +320,8 @@ function DocumentPanel({ kind }) {
                 </Button>
                 {kind !== "credit_note" && (
                     <>
-                        <Button asChild variant="outline" size="sm" disabled={selected.size !== 1} data-testid="fd-view-pdf">
-                            <Link to={one() ? `/invoices/${one()}` : "#"} target="_blank"><FileText className="mr-2 h-3.5 w-3.5" /> View Invoice PDF</Link>
+                        <Button variant="outline" size="sm" onClick={openPdf} disabled={selected.size !== 1} data-testid="fd-view-pdf">
+                            <FileText className="mr-2 h-3.5 w-3.5" /> View Invoice PDF
                         </Button>
                         <Button variant="outline" size="sm" onClick={share} disabled={selected.size !== 1} data-testid="fd-share">
                             <Share2 className="mr-2 h-3.5 w-3.5" /> Share Invoice PDF

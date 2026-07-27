@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import api, { formatApiError } from "@/lib/api";
+import api, { formatApiError, API_BASE } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
 import StatusChip from "@/components/common/StatusChip";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,32 @@ export default function IcsTransactions() {
     const [logOpen, setLogOpen] = useState(false);
     const [reasonsOpen, setReasonsOpen] = useState(false);
     const [activeId, setActiveId] = useState(null);
+    const [uploadedOpen, setUploadedOpen] = useState(false);
+    const fileRef = useRef(null);
+
+    const uploadFile = async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const fd = new FormData();
+        fd.append("file", f);
+        try {
+            const { data } = await api.post("/ics/bulk/upload", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            toast.success(`${data.invoices_created} invoices created from ${data.row_count} rows`);
+            if (data.parse_errors?.length) {
+                toast.error(`${data.parse_errors.length} row(s) had errors — check Uploaded Records`);
+            }
+            qc.invalidateQueries({ queryKey: ["ics-transactions"] });
+        } catch (err) {
+            toast.error(formatApiError(err));
+        } finally {
+            e.target.value = "";
+        }
+    };
+    const downloadTemplate = () => {
+        window.open(`${API_BASE}/ics/bulk/template`, "_blank");
+    };
 
     const queryString = useMemo(() => {
         const p = new URLSearchParams();
@@ -362,12 +388,14 @@ export default function IcsTransactions() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-                <Button variant="outline" size="sm" data-testid="op-upload"
-                    onClick={() => toast.info("Upload template — coming soon")}>
+                <Button variant="outline" size="sm" data-testid="op-upload" onClick={() => fileRef.current?.click()}>
                     <Upload className="mr-2 h-3.5 w-3.5" /> Upload Template
                 </Button>
-                <Button variant="outline" size="sm" data-testid="op-uploaded"
-                    onClick={() => toast.info("Uploaded records — coming soon")}>
+                <input ref={fileRef} type="file" accept=".csv,.xlsx" hidden onChange={uploadFile} data-testid="op-upload-file" />
+                <Button variant="ghost" size="sm" onClick={downloadTemplate} data-testid="op-template-dl">
+                    Download template
+                </Button>
+                <Button variant="outline" size="sm" data-testid="op-uploaded" onClick={() => setUploadedOpen(true)}>
                     <ListChecks className="mr-2 h-3.5 w-3.5" /> Uploaded Records
                 </Button>
                 <Button asChild variant="outline" size="sm" data-testid="op-submit" disabled={selected.size !== 1}>
@@ -477,7 +505,58 @@ export default function IcsTransactions() {
 
             <OperationLogDialog open={logOpen} onOpenChange={setLogOpen} id={activeId} />
             <InvalidReasonsDialog open={reasonsOpen} onOpenChange={setReasonsOpen} id={activeId} />
+            <UploadedRecordsDialog open={uploadedOpen} onOpenChange={setUploadedOpen} />
         </div>
+    );
+}
+
+function UploadedRecordsDialog({ open, onOpenChange }) {
+    const { data } = useQuery({
+        queryKey: ["upload-jobs"],
+        queryFn: async () => (await api.get("/ics/bulk/jobs")).data,
+        enabled: open,
+    });
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl">
+                <DialogHeader><DialogTitle>Uploaded Records</DialogTitle></DialogHeader>
+                <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {(data || []).length === 0 && (
+                        <div className="text-sm text-muted-foreground">No bulk uploads yet.</div>
+                    )}
+                    {(data || []).map((j) => (
+                        <div key={j.id} className="rounded border border-border p-3 text-xs" data-testid={`job-${j.id}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div className="font-mono">{j.filename}</div>
+                                    <div className="text-muted-foreground">
+                                        {j.uploaded_at} · {j.uploaded_by} · {Math.round(j.size_bytes / 1024)} KB
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-mono">
+                                        {j.invoices_created}/{j.row_count} rows
+                                    </div>
+                                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                        {j.status}
+                                    </div>
+                                </div>
+                            </div>
+                            {j.parse_errors?.length > 0 && (
+                                <div className="mt-2 rounded border border-destructive/30 bg-destructive/5 p-2 text-[10px]">
+                                    {j.parse_errors.slice(0, 5).map((e, i) => (
+                                        <div key={i}>Row {e.row}: {e.error}</div>
+                                    ))}
+                                    {j.parse_errors.length > 5 && (
+                                        <div className="text-muted-foreground">+{j.parse_errors.length - 5} more…</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
