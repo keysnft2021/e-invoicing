@@ -111,7 +111,7 @@ function RoleApplications() {
         <div>
             <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                    Simulates the MyTax "Role Application" flow (Appendix 2). Apply for a role, upload
+                    Simulates the MyTax &ldquo;Role Application&rdquo; flow (Appendix 2). Apply for a role, upload
                     supporting document, then approve or reject.
                 </p>
                 <Dialog open={open} onOpenChange={setOpen}>
