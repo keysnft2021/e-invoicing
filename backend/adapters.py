@@ -266,13 +266,15 @@ _MOCK: dict[str, GovernmentAdapter] = {"MY": MockLHDNAdapter()}
 
 
 def get_adapter(country: str = "MY") -> GovernmentAdapter:
-    """Synchronous mock lookup (backward compatible)."""
+    """Synchronous mock lookup (used for global health only)."""
     return _MOCK[country]
 
 
-async def resolve_adapter(country: str, db) -> GovernmentAdapter:
-    """Return real adapter if credentials exist and enabled, else mock."""
-    cfg = await db.gov_credentials.find_one({"country": country, "enabled": True})
+async def resolve_adapter(country: str, db, tenant_id: str) -> GovernmentAdapter:
+    """Return real adapter if THIS tenant has enabled credentials, else mock."""
+    cfg = await db.gov_credentials.find_one({
+        "country": country, "tenant_id": tenant_id, "enabled": True,
+    })
     if not cfg or not cfg.get("client_id") or not cfg.get("client_secret"):
         return _MOCK[country]
     try:
@@ -281,10 +283,12 @@ async def resolve_adapter(country: str, db) -> GovernmentAdapter:
         return _MOCK[country]
 
 
-async def list_adapters_with_status(db) -> list[dict]:
+async def list_adapters_with_status(db, tenant_id: str) -> list[dict]:
     out = []
     for c in _MOCK:
-        cfg = await db.gov_credentials.find_one({"country": c, "enabled": True})
+        cfg = await db.gov_credentials.find_one({
+            "country": c, "tenant_id": tenant_id, "enabled": True,
+        })
         out.append({"country": c,
                     "name": "lhdn_myinvois" if cfg else "mock_lhdn",
                     "mode": (cfg.get("environment") if cfg else "mock") or "mock"})

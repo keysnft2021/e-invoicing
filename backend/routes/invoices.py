@@ -167,7 +167,7 @@ async def _submit_task(invoice_id: str, tenant_id: str):
     doc = await db.invoices.find_one({"_id": ObjectId(invoice_id)})
     if not doc:
         return
-    adapter = await resolve_adapter(doc.get("country", "MY"), db)
+    adapter = await resolve_adapter(doc.get("country", "MY"), db, tenant_id)
     payload = {"invoice_number": doc["invoice_number"], "total": doc["total"],
                "tax_total": doc["tax_total"], "customer": doc.get("customer_snapshot", {}),
                "lines": doc["lines"]}
@@ -240,7 +240,7 @@ async def cancel_invoice(iid: str, body: CancelBody, ctx=Depends(require_tenant)
                                     tenant_id=ctx["tenant_id"],
                                     expected_action="invoice.cancel",
                                     expected_entity_id=iid)
-    adapter = await resolve_adapter(doc.get("country", "MY"), db)
+    adapter = await resolve_adapter(doc.get("country", "MY"), db, ctx["tenant_id"])
     gov_uuid = doc.get("government", {}).get("uuid", "")
     result = await adapter.cancel_invoice(gov_uuid, body.reason)
     now = datetime.now(timezone.utc).isoformat()

@@ -52,7 +52,7 @@ async def stats(ctx=Depends(require_tenant)):
         "success_rate": success_rate,
         "tax_collected": tax_collected,
         "trend": trend,
-        "adapters": await list_adapters_with_status(db),
+        "adapters": await list_adapters_with_status(db, ctx["tenant_id"]),
     }
 
 
@@ -65,5 +65,5 @@ async def health(ctx=Depends(require_tenant)):
         "database": {"healthy": True},
         "storage": {"healthy": True},
         "adapters": [my],
-        "adapter_modes": await list_adapters_with_status(db),
+        "adapter_modes": await list_adapters_with_status(db, ctx["tenant_id"]),
     }
