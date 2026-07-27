@@ -40,6 +40,14 @@ class InvoiceIn(BaseModel):
     notes: Optional[str] = None
     terms: Optional[str] = None
     invoice_type: str = "invoice"  # invoice | credit_note | debit_note
+    # ICS-specific fields (all optional)
+    business_system: Optional[str] = None
+    store_code: Optional[str] = None
+    source: Optional[str] = "portal"
+    invoice_confirmation_status: Optional[str] = "pending"
+    validation_result: Optional[str] = "pending"
+    supplier_tin: Optional[str] = None
+    supplier_name: Optional[str] = None
 
 
 class CancelBody(BaseModel):

@@ -19,6 +19,13 @@ import AuditLog from "@/pages/AuditLog";
 import Settings from "@/pages/Settings";
 import GovConfig from "@/pages/GovConfig";
 import SignApprove from "@/pages/SignApprove";
+import IcsLayout from "@/pages/ics/IcsLayout";
+import IcsDashboard from "@/pages/ics/IcsDashboard";
+import IcsTransactions from "@/pages/ics/IcsTransactions";
+import IcsConsolidated from "@/pages/ics/IcsConsolidated";
+import IcsFiscalDocument from "@/pages/ics/IcsFiscalDocument";
+import IcsReports from "@/pages/ics/IcsReports";
+import IcsBasicInfo from "@/pages/ics/IcsBasicInfo";
 import "@/App.css";
 
 export default function App() {
@@ -43,6 +50,14 @@ export default function App() {
                             <Route path="/roles" element={<RolesPage />} />
                             <Route path="/mytax" element={<MyTax />} />
                             <Route path="/gov-config" element={<GovConfig />} />
+                            <Route path="/ics" element={<IcsLayout />}>
+                                <Route index element={<IcsDashboard />} />
+                                <Route path="my-transaction" element={<IcsTransactions />} />
+                                <Route path="consolidated" element={<IcsConsolidated />} />
+                                <Route path="fiscal-document" element={<IcsFiscalDocument />} />
+                                <Route path="reports" element={<IcsReports />} />
+                                <Route path="basic-info" element={<IcsBasicInfo />} />
+                            </Route>
                             <Route path="/audit" element={<AuditLog />} />
                             <Route path="/settings" element={<Settings />} />
                         </Route>

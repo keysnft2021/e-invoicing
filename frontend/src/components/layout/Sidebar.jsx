@@ -19,10 +19,12 @@ import {
     ChevronsRight,
     Sparkles,
     KeyRound,
+    LayoutList,
 } from "lucide-react";
 
 const NAV = [
     { to: "/", label: "Overview", icon: LayoutDashboard, testid: "nav-overview" },
+    { to: "/ics", label: "ICS Console", icon: LayoutList, testid: "nav-ics" },
     { to: "/invoices", label: "Invoices", icon: FileText, testid: "nav-invoices" },
     { to: "/customers", label: "Customers", icon: Users, testid: "nav-customers" },
     { to: "/suppliers", label: "Suppliers", icon: Truck, testid: "nav-suppliers" },
