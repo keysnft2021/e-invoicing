@@ -332,6 +332,10 @@ async def _bridge_submit(invoice_id: str, tenant_id: str, client_id: str):
             {"$set": {"status": "rejected",
                        "government": {"errors": errs, "adapter": adapter.name},
                        "timeline": timeline, "updated_at": now}})
+    # Fire webhook to originating client system (fire-and-forget)
+    from webhooks import fire_webhook
+    import asyncio as _asyncio
+    _asyncio.create_task(fire_webhook(db, invoice_id))
 
 
 @router.get("/api/external/health")

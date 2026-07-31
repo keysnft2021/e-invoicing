@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from bson import ObjectId
 from typing import List, Optional
+import asyncio
 
 from deps import get_db, require_tenant
 from adapters import resolve_adapter
@@ -194,6 +195,8 @@ async def _submit_task(invoice_id: str, tenant_id: str):
         await db.invoices.update_one({"_id": ObjectId(invoice_id)},
             {"$set": {"status": "validated", "government": gov, "timeline": timeline,
                        "updated_at": now}})
+        from webhooks import fire_webhook
+        asyncio.create_task(fire_webhook(db, invoice_id))
     else:
         errs = result.get("errors", [])
         timeline.append({"status": "rejected",
@@ -202,6 +205,8 @@ async def _submit_task(invoice_id: str, tenant_id: str):
         await db.invoices.update_one({"_id": ObjectId(invoice_id)},
             {"$set": {"status": "rejected", "government": {"errors": errs, "adapter": adapter.name},
                        "timeline": timeline, "updated_at": now}})
+        from webhooks import fire_webhook
+        asyncio.create_task(fire_webhook(db, invoice_id))
 
 
 @router.post("/{iid}/submit")

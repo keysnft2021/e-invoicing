@@ -173,7 +173,8 @@ class RealLHDNAdapter(GovernmentAdapter):
 
     async def submit_invoice(self, invoice: dict) -> dict:
         auth = await self.authenticate()
-        signed = self._sign_document(invoice)
+        ubl = _to_ubl(invoice, self.config)
+        signed = self._sign_document(ubl)
         codenumber = invoice.get("invoice_number") or _rand("INV")
         submission = {
             "documents": [{
@@ -263,6 +264,142 @@ class RealLHDNAdapter(GovernmentAdapter):
 
 
 _MOCK: dict[str, GovernmentAdapter] = {"MY": MockLHDNAdapter()}
+
+
+# ---------- UBL 2.1 transformer for LHDN MyInvois ----------
+def _wrap(value):
+    """LHDN UBL 2.1 wraps every scalar as [{"_": value}]."""
+    return [{"_": value}] if value is not None else []
+
+
+def _amt(value, ccy="MYR"):
+    return [{"_": round(float(value or 0), 2), "currencyID": ccy}]
+
+
+def _to_ubl(invoice: dict, config: dict) -> dict:
+    """Map our internal invoice → LHDN MyInvois UBL 2.1 JSON."""
+    now = datetime.now(timezone.utc)
+    ccy = invoice.get("currency", "MYR")
+    lines = invoice.get("lines", []) or []
+    customer = invoice.get("customer", {}) or invoice.get("customer_snapshot", {}) or {}
+    supplier_tin = invoice.get("supplier_tin") or config.get("supplier_tin") or ""
+    supplier_name = invoice.get("supplier_name") or config.get("supplier_name") or "SUPPLIER"
+    supplier_brn = invoice.get("supplier_brn") or config.get("supplier_brn") or ""
+    supplier_sst = invoice.get("supplier_sst") or config.get("supplier_sst") or "NA"
+
+    inv_type_map = {"invoice": "01", "credit_note": "02", "debit_note": "03",
+                     "refund_note": "04", "self_billed_invoice": "11"}
+    inv_type = inv_type_map.get(invoice.get("invoice_type", "invoice"), "01")
+
+    def _party(name, tin, brn, sst_no, email=None, address=None, country="MYS"):
+        return [{
+            "PartyIdentification": [
+                {"ID": [{"_": tin or "NA", "schemeID": "TIN"}]},
+                {"ID": [{"_": brn or "NA", "schemeID": "BRN"}]},
+                {"ID": [{"_": sst_no or "NA", "schemeID": "SST"}]},
+            ],
+            "PartyLegalEntity": [{
+                "RegistrationName": _wrap(name),
+            }],
+            "PostalAddress": [{
+                "AddressLine": [{"Line": _wrap(address or "N/A")}],
+                "CityName": _wrap("Kuala Lumpur"),
+                "PostalZone": _wrap("50000"),
+                "CountrySubentityCode": _wrap("14"),
+                "Country": [{"IdentificationCode": [{"_": country, "listID": "ISO3166-1",
+                                                       "listAgencyID": "6"}]}],
+            }],
+            "Contact": [{"ElectronicMail": _wrap(email or "")}] if email else [{}],
+        }]
+
+    def _line(idx, l):
+        qty = float(l.get("quantity", 1))
+        price = float(l.get("unit_price", 0))
+        disc = float(l.get("discount", 0))
+        net = qty * price - disc
+        tax_rate = float(l.get("tax_rate", 6))
+        tax = round(net * (tax_rate / 100), 2)
+        return {
+            "ID": _wrap(str(idx)),
+            "InvoicedQuantity": [{"_": qty, "unitCode": l.get("unit") or "PCS"}],
+            "LineExtensionAmount": _amt(net, ccy),
+            "TaxTotal": [{
+                "TaxAmount": _amt(tax, ccy),
+                "TaxSubtotal": [{
+                    "TaxableAmount": _amt(net, ccy),
+                    "TaxAmount": _amt(tax, ccy),
+                    "Percent": _wrap(tax_rate),
+                    "TaxCategory": [{
+                        "ID": _wrap("01"),  # 01 = Sales Tax standard
+                        "TaxScheme": [{"ID": [{"_": "OTH", "schemeAgencyID": "6",
+                                                 "schemeID": "UN/ECE 5153"}]}],
+                    }],
+                }],
+            }],
+            "Item": [{
+                "Description": _wrap(l.get("description") or "Item"),
+                "CommodityClassification": [{
+                    "ItemClassificationCode": [{
+                        "_": l.get("classification_code") or "022",
+                        "listID": "CLASS",
+                    }],
+                }],
+                "OriginCountry": [{
+                    "IdentificationCode": [{"_": "MYS", "listID": "ISO3166-1", "listAgencyID": "6"}],
+                }],
+            }],
+            "Price": [{"PriceAmount": _amt(price, ccy)}],
+            "ItemPriceExtension": [{"Amount": _amt(net, ccy)}],
+        }
+
+    subtotal = float(invoice.get("subtotal") or
+                      sum(l["quantity"] * l["unit_price"] - l.get("discount", 0) for l in lines))
+    tax_total = float(invoice.get("tax_total") or
+                       sum((l["quantity"] * l["unit_price"] - l.get("discount", 0)) * (l["tax_rate"] / 100)
+                           for l in lines))
+    total = float(invoice.get("total") or subtotal + tax_total)
+
+    ubl = {
+        "_D": "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
+        "_A": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "_B": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+        "Invoice": [{
+            "ID": _wrap(invoice.get("invoice_number", "")),
+            "IssueDate": _wrap((invoice.get("invoice_date") or now.date().isoformat())[:10]),
+            "IssueTime": _wrap(now.strftime("%H:%M:%SZ")),
+            "InvoiceTypeCode": [{"_": inv_type, "listVersionID": "1.0"}],
+            "DocumentCurrencyCode": _wrap(ccy),
+            "TaxCurrencyCode": _wrap(ccy),
+            "AccountingSupplierParty": [{
+                "Party": _party(supplier_name, supplier_tin, supplier_brn, supplier_sst),
+            }],
+            "AccountingCustomerParty": [{
+                "Party": _party(customer.get("name", ""), customer.get("tin", ""),
+                                  customer.get("brn", ""), customer.get("sst_number", ""),
+                                  customer.get("email"), customer.get("billing_address")),
+            }],
+            "InvoiceLine": [_line(i + 1, l) for i, l in enumerate(lines)],
+            "TaxTotal": [{
+                "TaxAmount": _amt(tax_total, ccy),
+                "TaxSubtotal": [{
+                    "TaxableAmount": _amt(subtotal, ccy),
+                    "TaxAmount": _amt(tax_total, ccy),
+                    "TaxCategory": [{
+                        "ID": _wrap("01"),
+                        "TaxScheme": [{"ID": [{"_": "OTH", "schemeAgencyID": "6",
+                                                 "schemeID": "UN/ECE 5153"}]}],
+                    }],
+                }],
+            }],
+            "LegalMonetaryTotal": [{
+                "LineExtensionAmount": _amt(subtotal, ccy),
+                "TaxExclusiveAmount": _amt(subtotal, ccy),
+                "TaxInclusiveAmount": _amt(total, ccy),
+                "PayableAmount": _amt(total, ccy),
+            }],
+        }],
+    }
+    return ubl
 
 
 def get_adapter(country: str = "MY") -> GovernmentAdapter:
