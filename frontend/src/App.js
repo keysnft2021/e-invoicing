@@ -19,6 +19,7 @@ import AuditLog from "@/pages/AuditLog";
 import Settings from "@/pages/Settings";
 import GovConfig from "@/pages/GovConfig";
 import SignApprove from "@/pages/SignApprove";
+import ApiClients from "@/pages/ApiClients";
 import IcsLayout from "@/pages/ics/IcsLayout";
 import IcsDashboard from "@/pages/ics/IcsDashboard";
 import IcsTransactions from "@/pages/ics/IcsTransactions";
@@ -50,6 +51,7 @@ export default function App() {
                             <Route path="/roles" element={<RolesPage />} />
                             <Route path="/mytax" element={<MyTax />} />
                             <Route path="/gov-config" element={<GovConfig />} />
+                            <Route path="/api-clients" element={<ApiClients />} />
                             <Route path="/ics" element={<IcsLayout />}>
                                 <Route index element={<IcsDashboard />} />
                                 <Route path="my-transaction" element={<IcsTransactions />} />

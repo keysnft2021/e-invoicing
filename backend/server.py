@@ -24,6 +24,7 @@ from routes.gov_config import router as gov_config_router
 from routes.ics import router as ics_router
 from routes.bulk import router as bulk_router
 from routes.pdf_route import router as pdf_router
+from routes.api_clients import router as api_clients_router
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -67,5 +68,6 @@ async def health():
 
 for r in [auth_router, companies_router, masters_router, invoices_router,
           dashboard_router, mytax_router, admin_router, audit_router,
-          signing_router, gov_config_router, ics_router, bulk_router, pdf_router]:
+          signing_router, gov_config_router, ics_router, bulk_router, pdf_router,
+          api_clients_router]:
     app.include_router(r)
