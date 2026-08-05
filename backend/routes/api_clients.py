@@ -75,6 +75,7 @@ class RegisterBody(BaseModel):
     name: str
     system_type: str = "EMR"
     webhook_url: Optional[str] = None
+    company_id: str  # clinic this EMR/POS pushes for — required
 
 
 @router.get("/api/api-clients")
@@ -89,6 +90,11 @@ async def register_client(body: RegisterBody, ctx=Depends(require_tenant)):
     if body.system_type not in SYSTEM_TYPES:
         raise HTTPException(400, f"system_type must be one of {SYSTEM_TYPES}")
     db = get_db()
+    # Validate company_id belongs to this tenant
+    clinic = await db.companies.find_one({"_id": ObjectId(body.company_id),
+                                            "tenant_id": ctx["tenant_id"]})
+    if not clinic:
+        raise HTTPException(400, "company_id (clinic) not found in this tenant")
     now = datetime.now(timezone.utc).isoformat()
     client_id = f"cli_{secrets.token_urlsafe(16)}"
     client_secret = f"sk_live_{secrets.token_urlsafe(32)}"
@@ -100,6 +106,9 @@ async def register_client(body: RegisterBody, ctx=Depends(require_tenant)):
 
     doc = {
         "tenant_id": ctx["tenant_id"],
+        "company_id": body.company_id,
+        "company_tin": clinic.get("tin"),
+        "company_name": clinic.get("name"),
         "name": body.name,
         "system_type": body.system_type,
         "webhook_url": body.webhook_url,
@@ -247,6 +256,7 @@ async def bridge_create_invoice(body: BridgeInvoice, bg: BackgroundTasks, reques
 
     inv = {
         "tenant_id": tenant_id,
+        "company_id": client.get("company_id"),  # clinic this invoice belongs to
         "invoice_number": f"BRDG-{now.strftime('%Y%m')}-{int(now.timestamp() * 1000) % 100000:05d}",
         "invoice_type": "invoice",
         "invoice_date": body.invoice_date,
@@ -302,7 +312,8 @@ async def _bridge_submit(invoice_id: str, tenant_id: str, client_id: str):
     doc = await db.invoices.find_one({"_id": ObjectId(invoice_id)})
     if not doc:
         return
-    adapter = await resolve_adapter(doc.get("country", "MY"), db, tenant_id)
+    adapter = await resolve_adapter(doc.get("country", "MY"), db, tenant_id,
+                                       company_id=doc.get("company_id"))
     payload = {"invoice_number": doc["invoice_number"], "total": doc["total"],
                 "tax_total": doc["tax_total"], "customer": doc.get("customer_snapshot", {}),
                 "lines": doc["lines"]}

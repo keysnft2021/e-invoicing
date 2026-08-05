@@ -110,16 +110,28 @@ class RealLHDNAdapter(GovernmentAdapter):
     BASE_PREPROD = "https://preprod-api.myinvois.hasil.gov.my"
     BASE_PROD = "https://api.myinvois.hasil.gov.my"
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, on_behalf_of_tin: Optional[str] = None,
+                 clinic: Optional[dict] = None):
         self.config = config
         self.environment = config.get("environment", "preprod")
         self.client_id = config["client_id"]
         self.client_secret = config["client_secret"]
         self.certificate_pem = config.get("certificate_pem")
         self.private_key_pem = config.get("private_key_pem")
+        self.on_behalf_of_tin = on_behalf_of_tin
+        self.clinic = clinic  # supplier data used to build UBL supplier block
         self._token: Optional[str] = None
         self._token_expires_at: float = 0
         self._base = self.BASE_PROD if self.environment == "prod" else self.BASE_PREPROD
+
+    def _gov_headers(self, access_token: str) -> dict:
+        h = {"Authorization": f"Bearer {access_token}",
+             "Content-Type": "application/json"}
+        if self.on_behalf_of_tin:
+            # LHDN intermediary flag — required so LHDN attributes the submission
+            # to the taxpayer, not to GLOCO.
+            h["onbehalfof"] = self.on_behalf_of_tin
+        return h
 
     async def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=30.0, base_url=self._base)
@@ -173,7 +185,14 @@ class RealLHDNAdapter(GovernmentAdapter):
 
     async def submit_invoice(self, invoice: dict) -> dict:
         auth = await self.authenticate()
-        ubl = _to_ubl(invoice, self.config)
+        # Build UBL with clinic as supplier (intermediary mode) if provided
+        supplier_ctx = dict(self.config)
+        if self.clinic:
+            supplier_ctx["supplier_tin"] = self.clinic.get("tin")
+            supplier_ctx["supplier_brn"] = self.clinic.get("brn")
+            supplier_ctx["supplier_sst"] = self.clinic.get("sst_number")
+            supplier_ctx["supplier_name"] = self.clinic.get("legal_name") or self.clinic.get("name")
+        ubl = _to_ubl(invoice, supplier_ctx)
         signed = self._sign_document(ubl)
         codenumber = invoice.get("invoice_number") or _rand("INV")
         submission = {
@@ -186,8 +205,7 @@ class RealLHDNAdapter(GovernmentAdapter):
         }
         async with await self._client() as c:
             r = await c.post("/api/v1.0/documentsubmissions/",
-                             headers={"Authorization": f"Bearer {auth['access_token']}",
-                                      "Content-Type": "application/json"},
+                             headers=self._gov_headers(auth["access_token"]),
                              json=submission)
             if r.status_code >= 400:
                 return {"status": "rejected", "submission_uid": None,
@@ -226,8 +244,7 @@ class RealLHDNAdapter(GovernmentAdapter):
         auth = await self.authenticate()
         async with await self._client() as c:
             r = await c.put(f"/api/v1.0/documents/state/{uuid}/state",
-                            headers={"Authorization": f"Bearer {auth['access_token']}",
-                                     "Content-Type": "application/json"},
+                            headers=self._gov_headers(auth["access_token"]),
                             json={"status": "cancelled", "reason": reason})
             ok = r.status_code < 400
             return {"status": "cancelled" if ok else "error",
@@ -239,7 +256,7 @@ class RealLHDNAdapter(GovernmentAdapter):
         auth = await self.authenticate()
         async with await self._client() as c:
             r = await c.get(f"/api/v1.0/documents/{uuid}/details",
-                            headers={"Authorization": f"Bearer {auth['access_token']}"})
+                            headers=self._gov_headers(auth["access_token"]))
             return {"uuid": uuid, "http_status": r.status_code,
                     "response": r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text,
                     "timestamp": _now_iso()}
@@ -407,15 +424,32 @@ def get_adapter(country: str = "MY") -> GovernmentAdapter:
     return _MOCK[country]
 
 
-async def resolve_adapter(country: str, db, tenant_id: str) -> GovernmentAdapter:
-    """Return real adapter if THIS tenant has enabled credentials, else mock."""
+async def resolve_adapter(country: str, db, tenant_id: str,
+                            company_id: Optional[str] = None) -> GovernmentAdapter:
+    """Return real adapter if THIS tenant has enabled credentials, else mock.
+
+    When `company_id` is provided, the adapter operates in intermediary mode:
+    the clinic's TIN is sent as `OnBehalfOf` and the clinic's identifiers are
+    used in the UBL supplier block.
+    """
     cfg = await db.gov_credentials.find_one({
         "country": country, "tenant_id": tenant_id, "enabled": True,
     })
     if not cfg or not cfg.get("client_id") or not cfg.get("client_secret"):
         return _MOCK[country]
+    clinic = None
+    on_behalf = None
+    if company_id:
+        from bson import ObjectId
+        try:
+            clinic = await db.companies.find_one(
+                {"_id": ObjectId(company_id), "tenant_id": tenant_id})
+        except Exception:
+            clinic = None
+        if clinic:
+            on_behalf = clinic.get("tin")
     try:
-        return RealLHDNAdapter(cfg)
+        return RealLHDNAdapter(cfg, on_behalf_of_tin=on_behalf, clinic=clinic)
     except Exception:
         return _MOCK[country]
 

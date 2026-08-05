@@ -26,8 +26,12 @@ export default function ApiClients() {
     const [actOpen, setActOpen] = useState(false);
     const [activateFor, setActivateFor] = useState(null);
     const [otp, setOtp] = useState("");
-    const [form, setForm] = useState({ name: "", system_type: "EMR", webhook_url: "" });
+    const [form, setForm] = useState({ name: "", system_type: "EMR", webhook_url: "", company_id: "" });
 
+    const { data: companies } = useQuery({
+        queryKey: ["companies-for-clients"],
+        queryFn: async () => (await api.get("/companies")).data,
+    });
     const { data, isLoading } = useQuery({
         queryKey: ["api-clients"],
         queryFn: async () => (await api.get("/api-clients")).data,
@@ -36,12 +40,13 @@ export default function ApiClients() {
 
     const register = async () => {
         if (!form.name) return toast.error("Name is required");
+        if (!form.company_id) return toast.error("Select the clinic this EMR belongs to");
         try {
             const { data } = await api.post("/api-clients", form);
             setCredentials(data);
             setCredsOpen(true);
             setRegOpen(false);
-            setForm({ name: "", system_type: "EMR", webhook_url: "" });
+            setForm({ name: "", system_type: "EMR", webhook_url: "", company_id: "" });
             qc.invalidateQueries({ queryKey: ["api-clients"] });
         } catch (e) {
             toast.error(formatApiError(e));
@@ -90,6 +95,21 @@ export default function ApiClients() {
                         <DialogContent>
                             <DialogHeader><DialogTitle>Register API client</DialogTitle></DialogHeader>
                             <div className="grid gap-3">
+                                <div>
+                                    <Label>Clinic (taxpayer this EMR pushes for)</Label>
+                                    <Select value={form.company_id} onValueChange={(v) => setForm({ ...form, company_id: v })}>
+                                        <SelectTrigger className="mt-1.5" data-testid="cli-clinic">
+                                            <SelectValue placeholder="Select a clinic" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(companies || []).map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {c.name} · TIN {c.tin}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                 <div>
                                     <Label>System name</Label>
                                     <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
