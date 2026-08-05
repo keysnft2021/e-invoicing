@@ -14,8 +14,9 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Plus, KeyRound, Copy, ShieldCheck, Ban, Trash2, ExternalLink, QrCode } from "lucide-react";
+import { Plus, KeyRound, Copy, ShieldCheck, Ban, ExternalLink, QrCode, Code2, Gauge } from "lucide-react";
 import { fmtDate } from "@/lib/format";
 
 export default function ApiClients() {
@@ -26,7 +27,12 @@ export default function ApiClients() {
     const [actOpen, setActOpen] = useState(false);
     const [activateFor, setActivateFor] = useState(null);
     const [otp, setOtp] = useState("");
-    const [form, setForm] = useState({ name: "", system_type: "EMR", webhook_url: "", company_id: "" });
+    const [form, setForm] = useState({ name: "", system_type: "EMR", webhook_url: "", company_id: "", rate_limit_per_hour: 100 });
+    const [snippetsOpen, setSnippetsOpen] = useState(false);
+    const [snippets, setSnippets] = useState(null);
+    const [rateOpen, setRateOpen] = useState(false);
+    const [rateFor, setRateFor] = useState(null);
+    const [rateVal, setRateVal] = useState(100);
 
     const { data: companies } = useQuery({
         queryKey: ["companies-for-clients"],
@@ -46,11 +52,33 @@ export default function ApiClients() {
             setCredentials(data);
             setCredsOpen(true);
             setRegOpen(false);
-            setForm({ name: "", system_type: "EMR", webhook_url: "", company_id: "" });
+            setForm({ name: "", system_type: "EMR", webhook_url: "", company_id: "", rate_limit_per_hour: 100 });
             qc.invalidateQueries({ queryKey: ["api-clients"] });
         } catch (e) {
             toast.error(formatApiError(e));
         }
+    };
+
+    const openSnippets = async (c) => {
+        try {
+            const { data } = await api.get(`/api-clients/${c.id}/snippets`);
+            setSnippets({ ...data, name: c.name });
+            setSnippetsOpen(true);
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const openRate = (c) => {
+        setRateFor(c);
+        setRateVal(c.rate_limit_per_hour || 100);
+        setRateOpen(true);
+    };
+    const saveRate = async () => {
+        try {
+            await api.put(`/api-clients/${rateFor.id}/rate-limit`, { rate_limit_per_hour: Number(rateVal) });
+            toast.success(`Rate limit for ${rateFor.name} set to ${rateVal}/hour`);
+            setRateOpen(false); setRateFor(null);
+            qc.invalidateQueries({ queryKey: ["api-clients"] });
+        } catch (e) { toast.error(formatApiError(e)); }
     };
 
     const activate = async () => {
@@ -132,6 +160,18 @@ export default function ApiClients() {
                                     <Input value={form.webhook_url} onChange={(e) => setForm({ ...form, webhook_url: e.target.value })}
                                         className="mt-1.5" placeholder="https://your-emr.com/lhdn-callback" />
                                 </div>
+                                <div>
+                                    <Label>Rate limit (invoices / hour)</Label>
+                                    <Input
+                                        type="number" min={1} max={100000}
+                                        value={form.rate_limit_per_hour}
+                                        onChange={(e) => setForm({ ...form, rate_limit_per_hour: Number(e.target.value || 0) })}
+                                        className="mt-1.5"
+                                        data-testid="cli-rate-limit" />
+                                    <div className="mt-1 text-[10px] text-muted-foreground">
+                                        A rolling 1-hour window. Requests beyond this return HTTP 429.
+                                    </div>
+                                </div>
                             </div>
                             <DialogFooter>
                                 <Button onClick={register} data-testid="cli-save-btn">Generate credentials</Button>
@@ -169,6 +209,7 @@ export default function ApiClients() {
                                 <Row l="Registered" v={fmtDate(c.registered_at)} />
                                 <Row l="Activated" v={c.activated_at ? fmtDate(c.activated_at) : "—"} />
                                 <Row l="Invoices bridged" v={c.invoice_count || 0} mono />
+                                <Row l="Rate limit" v={`${c.rate_limit_per_hour || 100} / hr`} mono />
                                 <Row l="Last used" v={c.last_used_at ? fmtDate(c.last_used_at) : "—"} />
                             </div>
                             <div className="mt-4 flex flex-wrap gap-2">
@@ -187,10 +228,22 @@ export default function ApiClients() {
                                     </Button>
                                 )}
                                 {c.status === "active" && (
-                                    <Button size="sm" variant="outline"
-                                        onClick={() => revoke(c.id, c.name)} data-testid={`revoke-${c.id}`}>
-                                        <Ban className="mr-2 h-3.5 w-3.5" /> Revoke
-                                    </Button>
+                                    <>
+                                        <Button size="sm" variant="outline"
+                                            onClick={() => openSnippets(c)}
+                                            data-testid={`snippets-${c.id}`}>
+                                            <Code2 className="mr-2 h-3.5 w-3.5" /> SDK snippets
+                                        </Button>
+                                        <Button size="sm" variant="outline"
+                                            onClick={() => openRate(c)}
+                                            data-testid={`rate-${c.id}`}>
+                                            <Gauge className="mr-2 h-3.5 w-3.5" /> Rate limit
+                                        </Button>
+                                        <Button size="sm" variant="outline"
+                                            onClick={() => revoke(c.id, c.name)} data-testid={`revoke-${c.id}`}>
+                                            <Ban className="mr-2 h-3.5 w-3.5" /> Revoke
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -211,7 +264,7 @@ export default function ApiClients() {
                     </DialogHeader>
                     {credentials?.client_secret && (
                         <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
-                            <b>Save the client_secret now.</b> It's shown only this once — after closing this
+                            <b>Save the client_secret now.</b> It&apos;s shown only this once — after closing this
                             dialog only the hash is stored.
                         </div>
                     )}
@@ -246,6 +299,84 @@ export default function ApiClients() {
                     )}
                     <DialogFooter>
                         <Button onClick={() => setCredsOpen(false)}>Done</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* SDK snippets modal */}
+            <Dialog open={snippetsOpen} onOpenChange={setSnippetsOpen}>
+                <DialogContent className="max-w-3xl" data-testid="snippets-modal">
+                    <DialogHeader>
+                        <DialogTitle>SDK snippets · {snippets?.name}</DialogTitle>
+                    </DialogHeader>
+                    {snippets && (
+                        <div className="space-y-3">
+                            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+                                <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+                                    Bridge endpoint
+                                </div>
+                                <div className="flex items-center gap-2 font-mono text-[11px]">
+                                    <span className="flex-1 break-all">{snippets.bridge_url}</span>
+                                    <button onClick={() => copy(snippets.bridge_url, "Bridge URL")}
+                                        className="text-muted-foreground hover:text-foreground">
+                                        <Copy className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <div className="mt-2 text-[10px] text-muted-foreground">
+                                    Rate limit: <b className="text-foreground">{snippets.rate_limit_per_hour} req/hour</b> ·
+                                    Use the <code>client_secret</code> shown once at registration.
+                                </div>
+                            </div>
+                            <Tabs defaultValue="curl">
+                                <TabsList>
+                                    <TabsTrigger value="curl" data-testid="tab-curl">curl</TabsTrigger>
+                                    <TabsTrigger value="node" data-testid="tab-node">Node.js</TabsTrigger>
+                                    <TabsTrigger value="python" data-testid="tab-python">Python</TabsTrigger>
+                                    <TabsTrigger value="health" data-testid="tab-health">Health</TabsTrigger>
+                                </TabsList>
+                                {["curl", "node", "python", "health"].map((k) => (
+                                    <TabsContent key={k} value={k}>
+                                        <div className="relative">
+                                            <pre className="max-h-96 overflow-auto rounded-md border border-border bg-secondary/40 p-3 font-mono text-[11px] leading-relaxed"
+                                                data-testid={`snippet-${k}`}>
+{snippets.snippets[k]}
+                                            </pre>
+                                            <Button size="sm" variant="outline"
+                                                className="absolute right-2 top-2"
+                                                onClick={() => copy(snippets.snippets[k], k.toUpperCase())}>
+                                                <Copy className="mr-1 h-3.5 w-3.5" /> Copy
+                                            </Button>
+                                        </div>
+                                    </TabsContent>
+                                ))}
+                            </Tabs>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button onClick={() => setSnippetsOpen(false)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Rate limit modal */}
+            <Dialog open={rateOpen} onOpenChange={setRateOpen}>
+                <DialogContent data-testid="rate-modal">
+                    <DialogHeader>
+                        <DialogTitle>Rate limit · {rateFor?.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <Label>Invoices per rolling hour</Label>
+                        <Input type="number" min={1} max={100000} value={rateVal}
+                            onChange={(e) => setRateVal(e.target.value)}
+                            data-testid="rate-input" />
+                        <div className="text-xs text-muted-foreground">
+                            Requests beyond this quota return HTTP 429. Set higher for busy chains,
+                            lower for staging sandboxes.
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRateOpen(false)}>Cancel</Button>
+                        <Button onClick={saveRate} data-testid="rate-save-btn">Save</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

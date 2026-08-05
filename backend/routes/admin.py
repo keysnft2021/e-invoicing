@@ -96,5 +96,29 @@ async def delete_user(uid: str, ctx=Depends(require_tenant)):
 
 
 @router.get("/api/roles")
-async def list_roles():
-    return {"roles": ROLES, "permissions": PERMISSIONS}
+async def list_roles(ctx=Depends(require_tenant)):
+    db = get_db()
+    saved = {}
+    async for r in db.role_permissions.find({"tenant_id": ctx["tenant_id"]}):
+        saved[r["role"]] = r.get("permissions", {})
+    return {"roles": ROLES, "permissions": PERMISSIONS, "saved": saved}
+
+
+class RolePermsBody(BaseModel):
+    role: str
+    permissions: dict
+
+
+@router.put("/api/roles/permissions")
+async def save_role_permissions(body: RolePermsBody, ctx=Depends(require_tenant)):
+    if body.role not in ROLES:
+        raise HTTPException(400, f"Unknown role {body.role}")
+    db = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    await db.role_permissions.update_one(
+        {"tenant_id": ctx["tenant_id"], "role": body.role},
+        {"$set": {"permissions": body.permissions, "updated_at": now,
+                    "updated_by": ctx["user"]["email"]}},
+        upsert=True,
+    )
+    return {"ok": True, "role": body.role}

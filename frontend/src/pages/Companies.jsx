@@ -32,6 +32,7 @@ export default function Companies() {
         city: "",
         email: "",
         phone: "",
+        intermediary_confirmed: false,
     });
     const { data, isLoading } = useQuery({
         queryKey: ["companies"],
@@ -88,9 +89,27 @@ export default function Companies() {
                                     </div>
                                 ))}
                             </div>
+                            <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-3">
+                                <label className="flex items-start gap-2 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.intermediary_confirmed}
+                                        onChange={(e) => setForm({ ...form, intermediary_confirmed: e.target.checked })}
+                                        data-testid="comp-intermediary-confirm"
+                                        className="mt-0.5"
+                                    />
+                                    <span>
+                                        <b>Intermediary appointment confirmed.</b> I confirm this clinic has
+                                        appointed GLOCO Malaysia Berhad as its Intermediary in MyInvois
+                                        (Appendix 3.3) with permissions to Submit / Cancel / Request Rejection.
+                                        <br />
+                                        <span className="text-muted-foreground">Submissions are blocked until this is ticked.</span>
+                                    </span>
+                                </label>
+                            </div>
                             <DialogFooter>
                                 <Button onClick={create} data-testid="comp-save-btn">
-                                    Create
+                                    Onboard clinic
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -148,8 +167,10 @@ export default function Companies() {
                                     <div className="font-mono">{c.sst_number || "—"}</div>
                                 </div>
                                 <div>
-                                    <div className="text-muted-foreground">Branches</div>
-                                    <div>{c.branches?.length || 0}</div>
+                                    <div className="text-muted-foreground">Intermediary</div>
+                                    <div className={c.intermediary_confirmed ? "text-success" : "text-warning"}>
+                                        {c.intermediary_confirmed ? "Confirmed" : "Pending"}
+                                    </div>
                                 </div>
                             </div>
                             {c.branches?.length > 0 && (

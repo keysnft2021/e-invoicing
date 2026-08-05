@@ -19,6 +19,9 @@ class GovConfigIn(BaseModel):
     certificate_pem: Optional[str] = None
     private_key_pem: Optional[str] = None
     enabled: bool = True
+    # GLOCO's own authenticated TIN (from the OAuth token's TaxpayerTIN claim).
+    # When set, direct submissions using this TIN skip the `onbehalfof` header.
+    gloco_tin: Optional[str] = None
 
 
 def _mask(v: Optional[str]) -> Optional[str]:
@@ -39,6 +42,7 @@ def _redact(doc: dict) -> dict:
         "certificate_pem_set": bool(doc.get("certificate_pem")),
         "private_key_pem_set": bool(doc.get("private_key_pem")),
         "enabled": doc.get("enabled", False),
+        "gloco_tin": doc.get("gloco_tin"),
         "last_verified_at": doc.get("last_verified_at"),
         "last_verified_ok": doc.get("last_verified_ok"),
         "last_error": doc.get("last_error"),

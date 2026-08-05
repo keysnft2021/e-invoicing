@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 (LHDN preprod pilot + SDK snippets + per-client rate limits) fully verified. Backend: 10/10 new pytest cases pass in /app/backend/tests/iteration3_test.py. Reproduced a REAL LHDN preprod UUID `7XF6TNS5CRNDC80F7JRTZ8ZK10` (invoice INV-202608-34469) for GLOCO Pilot Clinic (company_id 6a7330392b20661e6a9c08c6, TIN C20923457010, customer Retail Buyer Sdn Bhd with phone +60312345678). Snippets endpoint GET /api/api-clients/{id}/snippets returns bridge_url, rate_limit_per_hour, and curl/node/python/health snippets — all four echo the actual client_id; 401 without auth; 400/404 for wrong id; 404 for cross-tenant id (second tenant). Rate-limit PUT /api/api-clients/{id}/rate-limit updates value (validated 1..100000, 0 and -5 => 422), reflected in GET /api/api-clients and in snippets response; cross-tenant PUT returns 404. POST /api/api-clients accepts optional rate_limit_per_hour (default 100). Rate-limit enforcement on /api/external/invoices: with limit=2, 1st + 2nd bridge invoices return 200, 3rd returns 429 with detail 'Rate limit exceeded — 2/2 invoices in the last hour…'; after PUT bumps limit to 10, a 4th call returns 200. Frontend: /api-clients page renders 18 client cards; each active card has SDK snippets + Rate limit + Revoke buttons with expected data-testids. SDK snippets modal shows Tabs (tab-curl/tab-node/tab-python/tab-health) whose corresponding <pre data-testid=snippet-{k}> elements each contain valid ≥30-char snippets with X-Client-Id header and the correct client_id. Rate-limit modal updates value via rate-input + rate-save-btn, toast 'Rate limit for X set to 88/hour' shown and card 'RATE LIMIT' row refreshes to '88 / hr' immediately.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/api-clients/{id}/snippets", "issue": "Cross-tenant / non-existent client id returns 400 when the id is not a valid ObjectId (ObjectId(cid) raises inside FastAPI handler) — cosmetic; 404 is returned for a well-formed but wrong id. Consider try/except → 404 for both cases so callers get a stable contract."},
+      {"endpoint": "GET /api/api-clients/{id}/snippets (auth)", "issue": "Unauthenticated call returns 401 in this run — matches spec. Note require_tenant returns 403 in some other paths; keep consistent."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard chart", "issues": ["Persistent Recharts 'The width(-1) and height(-1) of chart should be greater than 0' warning — carried from iteration 1/2, still unfixed."]},
+      {"screen": "ApiClients / SDK snippets modal", "issues": ["Inside the <pre>, snippets show '<CLIENT_SECRET>' as a placeholder — good — but there is no explicit note that the secret placeholder needs to be replaced with an env var. Copy button copies the literal placeholder, which users may miss. Consider a small helper line under each snippet reminding them to substitute env.CLIENT_SECRET."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/iteration3_test.py",
+    "/app/test_reports/pytest/iteration3.xml"
+  ],
+  "action_items": [
+    "None for iteration 3 features — all pass. Recommended follow-ups: (1) fix resolve_adapter / list_adapters_with_status cross-tenant leak flagged in iteration 2 (still open); (2) update /app/backend/tests/backend_test.py::test_invoice_lifecycle_validated + test_invoice_cancel_after_validate + test_audit_grows: they submit invoices under the default admin tenant's Acme (TIN C24681012340 ≠ gloco_tin C20923457010) and are now REJECTED by real LHDN preprod (by design). Retarget these regression tests to use company_id=GLOCO Pilot Clinic (6a7330392b20661e6a9c08c6) and a customer with a phone number, OR temporarily disable gov-config for the tenant during those tests; (3) iteration2_test.py needs REACT_APP_BACKEND_URL defaulted (currently produces MissingSchema when env var not set at pytest launch time)."
+  ],
+  "critical_code_review_comments": [
+    "api_clients.py::snippets — reads FRONTEND_URL from env for base; if FRONTEND_URL is unset, `base` becomes just '/api/external' (relative). Snippets then look like `curl -X POST /api/external/invoices` which is unusable in a client system. Defensive: fall back to request.base_url or REACT_APP_BACKEND_URL and log a warning at boot.",
+    "api_clients.py::_enforce_rate_limit — counts invoices where external_client_id matches and created_at ≥ cutoff. Comparison uses ISO-8601 string > cutoff string — works only because format is uniform. Prefer $gte with a real datetime and ensure created_at is stored as datetime, not string, to allow proper indexes.",
+    "api_clients.py::bridge_create_invoice — inserts customer even when bridge caller sends garbage TIN. Add TIN format validation (C\\d{11}) before insert to prevent junk masters.",
+    "api_clients.py::RateLimitBody uses Pydantic Field(ge=1, le=100000). Invalid values return 422 with Pydantic error shape, not the spec's 400. Cosmetic only.",
+    "api_clients.py::activate_client — no per-code lockout after N wrong attempts. A 6-digit code allows brute-force in ≤1M tries; add rate limiting / attempt counter."
+  ],
+  "updated_files": [
+    "/app/backend/tests/iteration3_test.py (NEW: 10 tests)"
+  ],
+  "success_rate": {"backend": "100% (10/10 iteration-3 pytest)", "frontend": "100% of tested flows (login → API Clients page → SDK snippets modal with 4 tabs and echoed client_id, Rate-limit modal save → card refresh → snippets modal reflects new rate)"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (working). Pilot: company_id=6a7330392b20661e6a9c08c6 (GLOCO Pilot Clinic, TIN C20923457010). gov_credentials MY = preprod, enabled, gloco_tin=C20923457010, last_verified_ok=true.",
+  "seed_data_creation": "iteration3_test.py registers ~10 TEST_ prefixed api_clients (TEST_Snip_*, TEST_RL_*, TEST_RLenf_*, TEST_RegRL_*, TEST_Snip_Iso_*, TEST_RL_Iso_*) each linked to GLOCO Pilot Clinic company_id. It also creates one real invoice via the pilot flow (INV-202608-34469 → UUID 7XF6TNS5CRNDC80F7JRTZ8ZK10) — a live LHDN preprod submission.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `python -m pytest backend/tests/iteration3_test.py -o addopts= -v` (repo pytest.ini uses xdist; -o disables it). The default addopts also breaks -n-less runs on iteration3 file (works fine). Iteration-3 endpoints: GET /api/api-clients/{id}/snippets → 401 no auth / 404 wrong id (or 400 if id not ObjectId-shaped) / 200 with keys client_id, base_url, bridge_url, health_url, rate_limit_per_hour, snippets:{curl,node,python,health}. PUT /api/api-clients/{id}/rate-limit body {rate_limit_per_hour:int 1..100000}, returns updated redacted client doc. POST /api/api-clients optional rate_limit_per_hour default 100. Bridge auth: `Authorization: Bearer <client_secret>` + `X-Client-Id: <client_id>`. Rate limit enforced in _enforce_rate_limit before insert on /api/external/invoices with sliding 1-hour count on invoices.external_client_id. Frontend testids: snippets-<clientId>, rate-<clientId>, snippet-curl/node/python/health, tab-curl/node/python/health, rate-input, rate-save-btn, cli-rate-limit. IMPORTANT: SPA hard-navigation to /api-clients via `page.goto` gets swallowed by the ingress' /api* rule and returns backend 404 — use sidebar click ('API Clients / Bridge') for SPA navigation.",
+  "rca_of_issue": "Regression failures in backend_test.py (test_invoice_lifecycle_validated, test_invoice_cancel_after_validate) are NOT iteration-3 regressions — they are the by-design LHDN preprod TIN-mismatch rejection introduced by iteration 3's real adapter switch for the admin tenant. Any invoice submitted under Acme (TIN C24681012340) will be rejected because gov_credentials.gloco_tin=C20923457010. Fix: retarget those tests to company_id=6a7330392b20661e6a9c08c6."
+}

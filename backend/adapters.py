@@ -127,9 +127,11 @@ class RealLHDNAdapter(GovernmentAdapter):
     def _gov_headers(self, access_token: str) -> dict:
         h = {"Authorization": f"Bearer {access_token}",
              "Content-Type": "application/json"}
-        if self.on_behalf_of_tin:
-            # LHDN intermediary flag — required so LHDN attributes the submission
-            # to the taxpayer, not to GLOCO.
+        gloco_tin = (self.config.get("gloco_tin") or "").strip()
+        # Only send `onbehalfof` when the clinic's TIN differs from GLOCO's own
+        # authenticated TIN. If they match, we are submitting AS GLOCO (direct
+        # taxpayer submission), and the header would confuse LHDN's validator.
+        if self.on_behalf_of_tin and self.on_behalf_of_tin != gloco_tin:
             h["onbehalfof"] = self.on_behalf_of_tin
         return h
 
@@ -156,14 +158,15 @@ class RealLHDNAdapter(GovernmentAdapter):
                     "issuer": f"LHDN MyInvois ({self.environment})", "cached": False}
 
     def _sign_document(self, doc_json: dict) -> dict:
-        """SHA-256 hash + (optional) RSA-SHA256 signature over document JSON.
+        """LHDN document envelope preparation.
 
-        When certificate_pem + private_key_pem are provided, a detached signature
-        is included alongside the hash so LHDN can verify authenticity.
+        Per LHDN MyInvois API spec (`documentsubmissions/`):
+          - `document` = Base64(minified UTF-8 JSON)
+          - `documentHash` = SHA-256 HEX (lowercase) of the SAME minified UTF-8 bytes
+        The bytes used for base64 encoding and for hashing MUST be identical.
         """
-        raw = json.dumps(doc_json, separators=(",", ":"), sort_keys=True).encode("utf-8")
-        digest = hashlib.sha256(raw).digest()
-        digest_b64 = base64.b64encode(digest).decode("ascii")
+        raw = json.dumps(doc_json, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        digest_hex = hashlib.sha256(raw).hexdigest()
         signature_b64 = None
         cert_hash_b64 = None
         if self.certificate_pem and self.private_key_pem:
@@ -177,9 +180,9 @@ class RealLHDNAdapter(GovernmentAdapter):
                 cert_hash = hashlib.sha256(self.certificate_pem.encode("utf-8")).digest()
                 cert_hash_b64 = base64.b64encode(cert_hash).decode("ascii")
             except Exception as e:
-                # Signing failure is non-fatal — LHDN may accept unsigned in preprod.
+                # Signing failure is non-fatal — LHDN accepts unsigned in preprod.
                 signature_b64 = f"error:{type(e).__name__}"
-        return {"documentHash": digest_b64, "signatureValue": signature_b64,
+        return {"documentHash": digest_hex, "signatureValue": signature_b64,
                 "certificateHash": cert_hash_b64,
                 "documentB64": base64.b64encode(raw).decode("ascii")}
 
@@ -192,6 +195,15 @@ class RealLHDNAdapter(GovernmentAdapter):
             supplier_ctx["supplier_brn"] = self.clinic.get("brn")
             supplier_ctx["supplier_sst"] = self.clinic.get("sst_number")
             supplier_ctx["supplier_name"] = self.clinic.get("legal_name") or self.clinic.get("name")
+            supplier_ctx["supplier_phone"] = self.clinic.get("phone")
+            supplier_ctx["supplier_email"] = self.clinic.get("email")
+            addr = self.clinic.get("address_line1") or ""
+            if self.clinic.get("address_line2"):
+                addr = (addr + ", " + self.clinic["address_line2"]).strip(", ")
+            supplier_ctx["supplier_address"] = addr or "N/A"
+            supplier_ctx["supplier_msic"] = self.clinic.get("msic_code") or "86201"
+            supplier_ctx["supplier_msic_desc"] = (self.clinic.get("msic_description")
+                                                   or "General medical services")
         ubl = _to_ubl(invoice, supplier_ctx)
         signed = self._sign_document(ubl)
         codenumber = invoice.get("invoice_number") or _rand("INV")
@@ -303,17 +315,23 @@ def _to_ubl(invoice: dict, config: dict) -> dict:
     supplier_name = invoice.get("supplier_name") or config.get("supplier_name") or "SUPPLIER"
     supplier_brn = invoice.get("supplier_brn") or config.get("supplier_brn") or ""
     supplier_sst = invoice.get("supplier_sst") or config.get("supplier_sst") or "NA"
+    supplier_phone = invoice.get("supplier_phone") or config.get("supplier_phone") or "+60300000000"
+    supplier_msic = invoice.get("supplier_msic") or config.get("supplier_msic") or "86201"
+    supplier_msic_desc = (invoice.get("supplier_msic_desc") or config.get("supplier_msic_desc")
+                          or "General medical services")
 
     inv_type_map = {"invoice": "01", "credit_note": "02", "debit_note": "03",
                      "refund_note": "04", "self_billed_invoice": "11"}
     inv_type = inv_type_map.get(invoice.get("invoice_type", "invoice"), "01")
 
-    def _party(name, tin, brn, sst_no, email=None, address=None, country="MYS"):
-        return [{
+    def _party(name, tin, brn, sst_no, email=None, address=None,
+               country="MYS", phone=None, msic=None, msic_desc=None):
+        party = {
             "PartyIdentification": [
                 {"ID": [{"_": tin or "NA", "schemeID": "TIN"}]},
                 {"ID": [{"_": brn or "NA", "schemeID": "BRN"}]},
                 {"ID": [{"_": sst_no or "NA", "schemeID": "SST"}]},
+                {"ID": [{"_": "NA", "schemeID": "TTX"}]},
             ],
             "PartyLegalEntity": [{
                 "RegistrationName": _wrap(name),
@@ -326,8 +344,17 @@ def _to_ubl(invoice: dict, config: dict) -> dict:
                 "Country": [{"IdentificationCode": [{"_": country, "listID": "ISO3166-1",
                                                        "listAgencyID": "6"}]}],
             }],
-            "Contact": [{"ElectronicMail": _wrap(email or "")}] if email else [{}],
-        }]
+            "Contact": [{
+                "Telephone": _wrap(phone or "+60300000000"),
+                "ElectronicMail": _wrap(email or "noreply@einvoices.world"),
+            }],
+        }
+        if msic:
+            party["IndustryClassificationCode"] = [{
+                "_": msic,
+                "name": msic_desc or "Business activity",
+            }]
+        return [party]
 
     def _line(idx, l):
         qty = float(l.get("quantity", 1))
@@ -388,12 +415,17 @@ def _to_ubl(invoice: dict, config: dict) -> dict:
             "DocumentCurrencyCode": _wrap(ccy),
             "TaxCurrencyCode": _wrap(ccy),
             "AccountingSupplierParty": [{
-                "Party": _party(supplier_name, supplier_tin, supplier_brn, supplier_sst),
+                "Party": _party(supplier_name, supplier_tin, supplier_brn, supplier_sst,
+                                email=config.get("supplier_email"),
+                                address=config.get("supplier_address"),
+                                phone=supplier_phone,
+                                msic=supplier_msic, msic_desc=supplier_msic_desc),
             }],
             "AccountingCustomerParty": [{
                 "Party": _party(customer.get("name", ""), customer.get("tin", ""),
                                   customer.get("brn", ""), customer.get("sst_number", ""),
-                                  customer.get("email"), customer.get("billing_address")),
+                                  customer.get("email"), customer.get("billing_address"),
+                                  phone=customer.get("phone") or "+60300000000"),
             }],
             "InvoiceLine": [_line(i + 1, l) for i, l in enumerate(lines)],
             "TaxTotal": [{
@@ -426,12 +458,6 @@ def get_adapter(country: str = "MY") -> GovernmentAdapter:
 
 async def resolve_adapter(country: str, db, tenant_id: str,
                             company_id: Optional[str] = None) -> GovernmentAdapter:
-    """Return real adapter if THIS tenant has enabled credentials, else mock.
-
-    When `company_id` is provided, the adapter operates in intermediary mode:
-    the clinic's TIN is sent as `OnBehalfOf` and the clinic's identifiers are
-    used in the UBL supplier block.
-    """
     cfg = await db.gov_credentials.find_one({
         "country": country, "tenant_id": tenant_id, "enabled": True,
     })
@@ -447,9 +473,21 @@ async def resolve_adapter(country: str, db, tenant_id: str,
         except Exception:
             clinic = None
         if clinic:
+            gloco_tin = (cfg.get("gloco_tin") or "").strip()
+            same_tin = gloco_tin and clinic.get("tin") == gloco_tin
+            # Guard: refuse to submit if intermediary appointment isn't
+            # confirmed. Bypass the guard when the clinic IS the GLOCO taxpayer
+            # itself (direct submission — no intermediary hop).
+            if not same_tin and not clinic.get("intermediary_confirmed"):
+                raise ValueError(
+                    f"Intermediary appointment not confirmed for clinic "
+                    f"{clinic.get('name')} (TIN {clinic.get('tin')}). "
+                    f"Confirm in /companies before submitting.")
             on_behalf = clinic.get("tin")
     try:
         return RealLHDNAdapter(cfg, on_behalf_of_tin=on_behalf, clinic=clinic)
+    except ValueError:
+        raise
     except Exception:
         return _MOCK[country]
 

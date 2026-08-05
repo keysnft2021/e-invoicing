@@ -67,6 +67,10 @@ def _redact(doc: dict) -> dict:
         "activated_at": doc.get("activated_at"),
         "last_used_at": doc.get("last_used_at"),
         "invoice_count": doc.get("invoice_count", 0),
+        "rate_limit_per_hour": doc.get("rate_limit_per_hour", 100),
+        "company_id": doc.get("company_id"),
+        "company_name": doc.get("company_name"),
+        "company_tin": doc.get("company_tin"),
     }
 
 
@@ -76,6 +80,11 @@ class RegisterBody(BaseModel):
     system_type: str = "EMR"
     webhook_url: Optional[str] = None
     company_id: str  # clinic this EMR/POS pushes for — required
+    rate_limit_per_hour: int = 100  # max /api/external/invoices calls per rolling hour
+
+
+class RateLimitBody(BaseModel):
+    rate_limit_per_hour: int = Field(ge=1, le=100000)
 
 
 @router.get("/api/api-clients")
@@ -119,6 +128,7 @@ async def register_client(body: RegisterBody, ctx=Depends(require_tenant)):
         "qr_payload": qr_payload,
         "status": "pending",
         "invoice_count": 0,
+        "rate_limit_per_hour": body.rate_limit_per_hour,
         "registered_at": now,
         "registered_by": ctx["user"]["email"],
     }
@@ -160,6 +170,104 @@ async def activate_client(cid: str, body: ActivateBody, ctx=Depends(require_tena
                 entity="api_client", entity_id=cid)
     doc = await db.api_clients.find_one({"_id": ObjectId(cid)})
     return _redact(doc)
+
+
+@router.put("/api/api-clients/{cid}/rate-limit")
+async def set_rate_limit(cid: str, body: RateLimitBody, ctx=Depends(require_tenant)):
+    db = get_db()
+    r = await db.api_clients.update_one(
+        {"_id": ObjectId(cid), "tenant_id": ctx["tenant_id"]},
+        {"$set": {"rate_limit_per_hour": body.rate_limit_per_hour}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Client not found")
+    await audit(db, tenant_id=ctx["tenant_id"], actor_id=ctx["user"]["id"],
+                actor_email=ctx["user"]["email"], action="api_client.rate_limit",
+                entity="api_client", entity_id=cid,
+                meta={"rate_limit_per_hour": body.rate_limit_per_hour})
+    doc = await db.api_clients.find_one({"_id": ObjectId(cid)})
+    return _redact(doc)
+
+
+@router.get("/api/api-clients/{cid}/snippets")
+async def snippets(cid: str, ctx=Depends(require_tenant)):
+    """Return copy-pasteable curl / Node / Python integration snippets for an
+    active client. Secrets are shown as `<CLIENT_SECRET>` placeholders so the
+    dashboard never reveals the actual credential (only shown once at creation).
+    """
+    db = get_db()
+    doc = await db.api_clients.find_one({"_id": ObjectId(cid), "tenant_id": ctx["tenant_id"]})
+    if not doc:
+        raise HTTPException(404, "Client not found")
+    base = (os.environ.get("FRONTEND_URL") or "").rstrip("/") + "/api/external"
+    client_id = doc["client_id"]
+    curl = f"""curl -X POST {base}/invoices \\
+  -H "Authorization: Bearer <CLIENT_SECRET>" \\
+  -H "X-Client-Id: {client_id}" \\
+  -H "Content-Type: application/json" \\
+  -d '{{
+    "external_ref": "EMR-2026-00001",
+    "customer_tin": "C25845632020",
+    "customer_name": "Retail Buyer Sdn Bhd",
+    "customer_email": "buyer@example.my",
+    "invoice_date": "2026-02-15",
+    "currency": "MYR",
+    "lines": [
+      {{"description":"Consultation","quantity":1,"unit_price":250,"tax_rate":6}}
+    ]
+  }}'"""
+    node = f"""// Node.js 18+ (native fetch)
+const res = await fetch("{base}/invoices", {{
+  method: "POST",
+  headers: {{
+    "Authorization": `Bearer ${{process.env.CLIENT_SECRET}}`,
+    "X-Client-Id":  "{client_id}",
+    "Content-Type": "application/json",
+  }},
+  body: JSON.stringify({{
+    external_ref: "EMR-2026-00001",
+    customer_tin:  "C25845632020",
+    customer_name: "Retail Buyer Sdn Bhd",
+    customer_email:"buyer@example.my",
+    invoice_date:  "2026-02-15",
+    currency:      "MYR",
+    lines: [{{ description:"Consultation", quantity:1, unit_price:250, tax_rate:6 }}],
+  }}),
+}});
+const data = await res.json();
+console.log(data);  // {{ id, invoice_number, status, total, auto_submit_queued, external_ref }}"""
+    python = f"""# Python 3.10+
+import os, httpx
+
+r = httpx.post(
+    "{base}/invoices",
+    headers={{
+        "Authorization": f"Bearer {{os.environ['CLIENT_SECRET']}}",
+        "X-Client-Id":   "{client_id}",
+        "Content-Type":  "application/json",
+    }},
+    json={{
+        "external_ref": "EMR-2026-00001",
+        "customer_tin":  "C25845632020",
+        "customer_name": "Retail Buyer Sdn Bhd",
+        "customer_email":"buyer@example.my",
+        "invoice_date":  "2026-02-15",
+        "currency":      "MYR",
+        "lines": [{{"description":"Consultation","quantity":1,"unit_price":250,"tax_rate":6}}],
+    }},
+)
+print(r.json())"""
+    health = f"""curl {base}/health \\
+  -H "Authorization: Bearer <CLIENT_SECRET>" \\
+  -H "X-Client-Id: {client_id}\""""
+    return {
+        "client_id": client_id,
+        "base_url": base,
+        "bridge_url": f"{base}/invoices",
+        "health_url": f"{base}/health",
+        "rate_limit_per_hour": doc.get("rate_limit_per_hour", 100),
+        "snippets": {"curl": curl, "node": node, "python": python, "health": health},
+    }
 
 
 @router.post("/api/api-clients/{cid}/revoke")
@@ -224,6 +332,23 @@ async def _authenticate_client(request: Request):
     return doc
 
 
+async def _enforce_rate_limit(db, client: dict):
+    """Sliding-hour submission quota per API client (enforced on bridge writes)."""
+    limit = int(client.get("rate_limit_per_hour") or 100)
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    count = await db.invoices.count_documents({
+        "external_client_id": client["client_id"],
+        "created_at": {"$gte": cutoff},
+    })
+    if count >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded — {count}/{limit} invoices in the last hour. "
+                   f"Contact your administrator to raise the quota.",
+        )
+
+
 @router.post("/api/external/invoices")
 async def bridge_create_invoice(body: BridgeInvoice, bg: BackgroundTasks, request: Request):
     """Third-party systems push invoices here. Auto-submits to LHDN under
@@ -231,6 +356,7 @@ async def bridge_create_invoice(body: BridgeInvoice, bg: BackgroundTasks, reques
     """
     client = await _authenticate_client(request)
     db = get_db()
+    await _enforce_rate_limit(db, client)
     tenant_id = client["tenant_id"]
     now = datetime.now(timezone.utc)
 

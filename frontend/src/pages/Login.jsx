@@ -51,7 +51,7 @@ export default function Login() {
                         <div className="h-9 w-9 rounded-lg bg-foreground text-background grid place-items-center">
                             <Sparkles className="h-4 w-4" />
                         </div>
-                        <div className="font-display text-lg font-semibold">Ledger.gov</div>
+                        <div className="font-display text-lg font-semibold">eInvoices.world</div>
                     </div>
                     <div>
                         <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -76,7 +76,7 @@ export default function Login() {
                         </div>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                        © {new Date().getFullYear()} Ledger.gov · PreProd sandbox
+                        © {new Date().getFullYear()} eInvoices.world · PreProd sandbox
                     </div>
                 </div>
 

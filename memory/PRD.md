@@ -1,64 +1,101 @@
-# Enterprise E-Invoicing Platform — PRD
+# eInvoices.world — PRD
 
 ## Problem statement
-Modern Enterprise E-Invoicing Platform for Malaysia LHDN MyInvois (with future support for Singapore IRAS, India GST, Saudi ZATCA, Peppol). API-first, multi-tenant, RBAC, pluggable government adapter layer.
+Enterprise E-Invoicing Platform for Malaysia LHDN MyInvois. Multi-tenant SaaS
+acting as an **Intermediary (GLOCO)** between clinics'/retailers' EMR/POS/ERP
+systems and the government LHDN API. API-first, RBAC, pluggable government
+adapter layer with future support for Singapore IRAS, India GST, Saudi ZATCA,
+Peppol.
 
 ## Stack
 - React (CRA) + Tailwind + Shadcn UI + Tanstack Query + Sonner
 - FastAPI + Python + JWT auth + MongoDB
 - Pluggable adapters (`MockLHDNAdapter`, `RealLHDNAdapter` — OAuth2 + RSA-SHA256)
 - `qrcode` + step-up MFA sessions for privileged government actions
-- Emergent LLM key: not wired yet (user chose placeholders)
+- LHDN MyInvois **preprod** (`preprod-api.myinvois.hasil.gov.my`)
 
 ## Personas
 - Super Admin, Organization Owner, Company Admin / Finance Manager / Executive
 - Auditor (read-only), Sales, Purchasing
-- External: Customer/Vendor (future), API User, Support
+- External: API User (EMR/POS/ERP), Customer/Vendor, Support
 
 ## What is implemented
 ### Iteration 1 (Feb 2026)
 - Multi-tenant + JWT auth, bcrypt, 17-role catalog, admin seed
 - Companies (CRUD + branches, TIN/BRN/SST)
 - Master data: Customers, Suppliers, Products (HS codes, tax codes)
-- Invoice module: draft → submit → validated / rejected → cancel with live timeline; deterministic `.13` rejection path in mock
+- Invoice module: draft → submit → validated / rejected → cancel with live timeline
 - Government Adapter Layer (`GovernmentAdapter` ABC + `MockLHDNAdapter`)
 - Dashboard: live stats, 14-day trend chart, adapter health, recent invoices
 - MyTax / MyInvois onboarding: Role Application, Representative Permissions, Intermediary
 - User management + Roles/RBAC page + Audit trail + Settings + Command palette
-- Enterprise design (Manrope headings, IBM Plex body, JetBrains Mono for numbers)
 
-### Iteration 2 (this update)
-- **Real LHDN adapter (`RealLHDNAdapter`)** — OAuth2 client_credentials, RSA-SHA256 signing (when certificate + private key configured), submits to `preprod-api.myinvois.hasil.gov.my/api/v1.0/documentsubmissions/`, parses accepted/rejected documents, returns UUID/LongID/ValidationID
-- **Auto-switching adapter resolution** — `resolve_adapter(country, db, tenant_id)` returns real adapter only when THIS tenant has enabled credentials, else mock. Verified multi-tenant isolation (Tenant B never sees Tenant A's LHDN mode).
-- **Government Credentials admin page** (`/gov-config`) — save `client_id`, `client_secret`, X.509 cert PEM, private key PEM; "Verify connection" hits `/connect/token` and stores `last_verified_ok` / `last_error`; secrets are redacted in GET responses.
-- **QR + 6-digit step-up MFA (`/api/signing/*`)** — every invoice submit and cancel must first create a signing session, then be approved (via 6-digit code OR by scanning the QR that opens `/sign/:sessionId?c=CODE`). Sessions are 5-min TTL, single-use, tenant-scoped, bound to `(action, entity_id)`. Consumed sessions cannot be reused; cross-entity and cross-tenant attempts are rejected.
-- **SigningGate** React component — modal that renders QR + shows code + accepts OTP input + polls approval status.
-- **/sign/:sessionId public approval page** — after login, user can Approve or Reject the pending government action.
+### Iteration 2
+- **Real LHDN adapter** — OAuth2 client_credentials, RSA-SHA256 signing,
+  submits to `preprod-api.myinvois.hasil.gov.my/api/v1.0/documentsubmissions/`
+- Auto-switching adapter resolution (per-tenant real vs mock)
+- Government Credentials admin page (`/gov-config`)
+- **QR + 6-digit step-up MFA** on every submit/cancel
+- SigningGate React component + `/sign/:sessionId` public approval page
 
-## What is deferred (backlog)
-### P0
-- OpenAPI docs polish + Postman collection
-- Approval workflow engine (multi-level, department/amount-based)
-- Attachments (PDF/XML/JSON) with object storage
-- Wire real LHDN certificate + preprod credentials once obtained
+### Iteration 3
+- ICS (Integration Console for Sellers) UI matching LHDN portal
+- Bulk CSV/Excel upload, signed PDF generation
+- API Client Bridge (EMR/POS/ERP) with QR activation + webhook callbacks
+- UBL 2.1 transformer with intermediary `OnBehalfOf` header
+- Configurable Roles page + Clinic Onboarding Wizard + brand rename to eInvoices.world
 
+### Iteration 4 (this update — Feb 2026)
+- **Real LHDN preprod UUID obtained** end-to-end. Pilot clinic (`GLOCO Pilot
+  Clinic`, TIN `C20923457010`) submitted invoice `INV-202608-34003` →
+  `uuid: K1YBN0YP691SD7BTHYHCZ8ZK10`.
+- **UBL 2.1 hash fix** — `documentHash` now sent as SHA-256 **hex** (was base64)
+  matching LHDN spec. Base64 doc + hex hash use identical minified UTF-8 bytes.
+- **UBL enrichment** — supplier & buyer `Contact.Telephone`,
+  `IndustryClassificationCode` (MSIC) with description, `TTX` party identifier.
+- **GLOCO taxpayer TIN** stored in `gov_credentials.gloco_tin`. Adapter skips
+  `onbehalfof` header when clinic TIN equals GLOCO's own TIN (direct
+  submission, no intermediary hop needed until LHDN registers GLOCO as
+  intermediary).
+- **API Client SDK snippets** — new `GET /api/api-clients/{id}/snippets`
+  returns copy-pasteable curl / Node.js / Python / health-probe examples with
+  the client's real `X-Client-Id` and bridge URL prefilled. Rendered in a
+  Tabs modal on `/api-clients` (SDK Snippets button, active clients only).
+- **Per-client rate limits** — new `rate_limit_per_hour` field (default 100)
+  editable via `PUT /api/api-clients/{id}/rate-limit` and inline modal.
+  Enforced on `/api/external/invoices` with sliding-hour count → HTTP 429
+  when exceeded. Verified: 3rd call rejected with limit=2.
+
+## Backlog
 ### P1
-- AI Invoice Assistant, AI Error Detection (Claude via Emergent Universal Key)
 - Notification center (email/SMS/webhook)
 - Reports (Sales, Tax, Aging) with CSV/PDF export
 - Credit note / Debit note first-class flows
 - Batch submission + retry queue visualization
-- Peppol / IRAS / GST / ZATCA adapters
 
 ### P2
-- Command palette full-text search
-- Column chooser + saved filters + bulk actions
-- Inline editing on tables + optimistic updates
+- Clinic-level filter/switcher across every ICS page
+- Per-clinic dashboard stats (invoices this month, RM billed, LHDN success %)
+- Full Supplier & Product modules (Vendor mgmt, Inventory, Variants)
+- Peppol / IRAS / GST / ZATCA adapters
 - MFA / 2FA / IP whitelisting / API keys per user
+
+### P3
+- AI Invoice Assistant / Error Detection / Tax Suggestions / Fraud Detection
+- Dynamic Form Engine (metadata-driven gov forms)
+- Command palette full-text search
+
+## Refactoring
+- `/app/backend/adapters.py` is ~470 lines. Candidate split:
+  `lhdn/oauth.py`, `lhdn/ubl.py`, `lhdn/submit.py`, `lhdn/sign.py`.
 
 ## Test credentials
 See `/app/memory/test_credentials.md`. Admin: `admin@einvoice.my` / `Admin@12345`.
 
 ## Test results
-- Iteration 1: `/app/test_reports/iteration_1.json` — 16/16 backend, all frontend flows pass.
-- Iteration 2: `/app/test_reports/iteration_2.json` — 30/30 backend, all frontend flows pass. Cross-tenant leak identified in `resolve_adapter` was **fixed and verified live** (Tenant A `preprod`, Tenant B `mock`).
+- Iteration 1: 16/16 backend + all frontend flows pass
+- Iteration 2: 30/30 backend + cross-tenant leak fixed and verified
+- Iteration 3: bridge + UBL 2.1 verified
+- Iteration 4 (this): real LHDN UUID `K1YBN0YP691SD7BTHYHCZ8ZK10`, rate-limit
+  enforcement verified (limit=2 → HTTP 429 on 3rd call), snippets endpoint
+  returns valid curl/Node/Python for active clients.

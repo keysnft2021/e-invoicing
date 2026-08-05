@@ -91,9 +91,9 @@ export default function Sidebar() {
                 </div>
                 {!collapsed && (
                     <div className="flex flex-col leading-tight">
-                        <span className="font-display font-semibold text-sm">Ledger.gov</span>
+                        <span className="font-display font-semibold text-sm">eInvoices.world</span>
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                            E-Invoicing
+                            LHDN MyInvois
                         </span>
                     </div>
                 )}

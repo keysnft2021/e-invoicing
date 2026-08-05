@@ -32,6 +32,10 @@ class CompanyIn(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     branches: List[Branch] = []
+    # Intermediary appointment (Appendix 3.3)
+    intermediary_confirmed: bool = False
+    intermediary_confirmed_at: Optional[str] = None
+    intermediary_confirmed_by: Optional[str] = None
 
 
 def _s(doc):
