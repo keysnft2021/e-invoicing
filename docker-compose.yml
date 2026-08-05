@@ -1,0 +1,68 @@
+# Production-ready compose stack for DigitalOcean (or any Docker host).
+# Usage:
+#   1. cp .env.example .env  # then edit secrets
+#   2. docker compose up -d --build
+#   3. Point your domain's A record at the droplet IP.
+#   4. (Recommended) Put Caddy / Traefik / a DO load balancer in front for TLS.
+#
+# Services:
+#   mongo   — persistent MongoDB 7 with a named volume
+#   backend — FastAPI on :8001 (internal only)
+#   web     — nginx serving React SPA + reverse-proxying /api to backend
+#             exposed on host port 80 (or ${WEB_HOST_PORT})
+services:
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=${DB_NAME:-einvoices}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - MONGO_URL=${MONGO_URL:-mongodb://mongo:27017}
+      - DB_NAME=${DB_NAME:-einvoices}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL}
+    expose:
+      - "8001"
+    networks: [internal]
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Bake the SPA to hit the same origin — nginx below proxies /api.
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-/}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_HOST_PORT:-80}:80"
+    networks: [internal]
+
+volumes:
+  mongo_data:
+
+networks:
+  internal:
+    driver: bridge
