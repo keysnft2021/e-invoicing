@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 import PageHeader from "@/components/common/PageHeader";
 import StatCard from "@/components/common/StatCard";
 import StatusChip from "@/components/common/StatusChip";
@@ -30,14 +31,21 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
+    const { currentId, current, isAll } = useCompany();
+    const scopeQs = currentId ? `?company_id=${currentId}` : "";
     const { data: stats, isLoading } = useQuery({
-        queryKey: ["dashboard-stats"],
-        queryFn: async () => (await api.get("/dashboard/stats")).data,
+        queryKey: ["dashboard-stats", currentId],
+        queryFn: async () => (await api.get(`/dashboard/stats${scopeQs}`)).data,
         refetchInterval: 15000,
     });
     const { data: invoices } = useQuery({
-        queryKey: ["dashboard-invoices"],
-        queryFn: async () => (await api.get("/invoices?limit=8")).data,
+        queryKey: ["dashboard-invoices", currentId],
+        queryFn: async () => {
+            const url = currentId
+                ? `/invoices?limit=8&company_id=${currentId}`
+                : "/invoices?limit=8";
+            return (await api.get(url)).data;
+        },
     });
     const { data: health } = useQuery({
         queryKey: ["dashboard-health"],
@@ -56,9 +64,13 @@ export default function Dashboard() {
     return (
         <div>
             <PageHeader
-                kicker="Overview"
+                kicker={isAll ? "Overview · All clinics" : `Overview · ${current?.name || ""}`}
                 title="Command center"
-                subtitle="Realtime pulse of your invoices, submissions and government API health."
+                subtitle={
+                    isAll
+                        ? "Realtime pulse across every clinic in this tenant. Switch scope from the topbar."
+                        : `Scoped to ${current?.name}${current?.tin ? ` (TIN ${current.tin})` : ""}.`
+                }
                 actions={
                     <Button asChild data-testid="hero-new-invoice">
                         <Link to="/invoices/new">

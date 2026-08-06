@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 import PageHeader from "@/components/common/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,11 +28,18 @@ const MONTHS = [
 const COLORS = { yearly: "#f5c518", monthly: "#a9dbe6", weekly: "#279aa9", daily: "#1f5fbb" };
 
 export default function IcsDashboard() {
+    const { currentId, current, isAll } = useCompany();
     const [month, setMonth] = useState(0);
     const [statsMode, setStatsMode] = useState("Receipts/Invoices Issued");
     const { data, isLoading } = useQuery({
-        queryKey: ["ics-summary", month],
-        queryFn: async () => (await api.get(`/ics/summary${month ? `?month=${month}` : ""}`)).data,
+        queryKey: ["ics-summary", month, currentId],
+        queryFn: async () => {
+            const params = new URLSearchParams();
+            if (month) params.set("month", month);
+            if (currentId) params.set("company_id", currentId);
+            const qs = params.toString();
+            return (await api.get(`/ics/summary${qs ? `?${qs}` : ""}`)).data;
+        },
         refetchInterval: 15000,
     });
 
@@ -49,9 +57,13 @@ export default function IcsDashboard() {
     return (
         <div>
             <PageHeader
-                kicker="ICS · Integration Console"
+                kicker={isAll ? "ICS · Integration Console · All clinics" : `ICS · ${current?.name || ""}`}
                 title="Sales Invoices"
-                subtitle="LHDN MyInvois-style overview of your document flow."
+                subtitle={
+                    isAll
+                        ? "LHDN MyInvois-style overview of your document flow across every clinic."
+                        : `LHDN MyInvois-style overview scoped to ${current?.name}.`
+                }
             />
 
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">

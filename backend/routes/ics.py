@@ -33,11 +33,14 @@ def _s(doc):
 
 # ---------- Summary ----------
 @router.get("/summary")
-async def summary(ctx=Depends(require_tenant), month: Optional[int] = None):
+async def summary(ctx=Depends(require_tenant), month: Optional[int] = None,
+                   company_id: Optional[str] = None):
     """Sales Invoices card + Statistics Type donut data."""
     db = get_db()
     tenant_id = ctx["tenant_id"]
     q = {"tenant_id": tenant_id}
+    if company_id:
+        q["company_id"] = company_id
     if month:
         # month = 1..12, filter by created_at month in current year
         year = datetime.now(timezone.utc).year
@@ -70,10 +73,11 @@ async def summary(ctx=Depends(require_tenant), month: Optional[int] = None):
     month_start = f"{now.year}-{now.month:02d}-01"
     year_start = f"{now.year}-01-01"
 
-    daily = await db.invoices.count_documents({"tenant_id": tenant_id, "created_at": {"$gte": today}})
-    weekly = await db.invoices.count_documents({"tenant_id": tenant_id, "created_at": {"$gte": week_start_iso}})
-    monthly = await db.invoices.count_documents({"tenant_id": tenant_id, "created_at": {"$gte": month_start}})
-    yearly = await db.invoices.count_documents({"tenant_id": tenant_id, "created_at": {"$gte": year_start}})
+    weekly = await db.invoices.count_documents({**q, "created_at": {"$gte": week_start_iso}})
+    monthly = await db.invoices.count_documents({**q, "created_at": {"$gte": month_start}})
+    yearly = await db.invoices.count_documents({**q, "created_at": {"$gte": year_start}})
+    daily_q = {**q, "created_at": {"$gte": today}}
+    daily = await db.invoices.count_documents(daily_q)
 
     return {
         "sales_invoices": {
@@ -96,6 +100,7 @@ async def summary(ctx=Depends(require_tenant), month: Optional[int] = None):
 @router.get("/transactions")
 async def list_transactions(
     ctx=Depends(require_tenant),
+    company_id: Optional[str] = None,
     document_type: Optional[str] = None,
     document_no: Optional[str] = None,
     supplier_tin: Optional[str] = None,
@@ -120,6 +125,8 @@ async def list_transactions(
 ):
     db = get_db()
     q = {"tenant_id": ctx["tenant_id"]}
+    if company_id:
+        q["company_id"] = company_id
     if document_type: q["invoice_type"] = document_type
     if document_no: q["invoice_number"] = {"$regex": document_no, "$options": "i"}
     if supplier_tin: q["supplier_tin"] = {"$regex": supplier_tin, "$options": "i"}

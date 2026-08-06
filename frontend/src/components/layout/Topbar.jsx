@@ -1,6 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import { useCompany } from "@/context/CompanyContext";
+import { useCompany, ALL_COMPANIES } from "@/context/CompanyContext";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -10,13 +10,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Sun, Moon, LogOut, Command } from "lucide-react";
+import { Search, Sun, Moon, LogOut, Command, Building2, CheckCircle2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function Topbar({ onOpenCommand }) {
     const { user, logout } = useAuth();
     const { theme, toggle } = useTheme();
-    const { current, companies, switchCompany } = useCompany();
+    const { current, companies, switchCompany, isAll } = useCompany();
 
     const initials = (user?.name || user?.email || "?")
         .split(/\s|@/)
@@ -48,25 +48,51 @@ export default function Topbar({ onOpenCommand }) {
                         size="sm"
                         className="hidden md:inline-flex"
                     >
-                        <Command className="mr-2 h-3.5 w-3.5" />
-                        <span className="max-w-[160px] truncate">{current?.name || "No company"}</span>
+                        <Building2 className="mr-2 h-3.5 w-3.5" />
+                        <span className="max-w-[180px] truncate">
+                            {isAll ? "All clinics" : (current?.name || "No company")}
+                        </span>
+                        {isAll && (
+                            <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent">
+                                {companies.length}
+                            </span>
+                        )}
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel>Switch company</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuLabel>Scope dashboard & ICS</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        data-testid="switch-company-all"
+                        onSelect={() => switchCompany(ALL_COMPANIES)}
+                        className="flex items-center gap-2"
+                    >
+                        <div className="flex-1">
+                            <div className="text-sm font-medium">All clinics</div>
+                            <div className="text-[10px] text-muted-foreground">
+                                Aggregate across {companies.length}{" "}
+                                {companies.length === 1 ? "company" : "companies"}
+                            </div>
+                        </div>
+                        {isAll && <CheckCircle2 className="h-4 w-4 text-accent" />}
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {companies.map((c) => (
                         <DropdownMenuItem
                             key={c.id}
                             data-testid={`switch-company-${c.id}`}
                             onSelect={() => switchCompany(c.id)}
+                            className="flex items-center gap-2"
                         >
-                            <div>
+                            <div className="flex-1">
                                 <div className="text-sm">{c.name}</div>
                                 <div className="font-mono text-[10px] text-muted-foreground">
                                     {c.tin}
                                 </div>
                             </div>
+                            {current?.id === c.id && (
+                                <CheckCircle2 className="h-4 w-4 text-accent" />
+                            )}
                         </DropdownMenuItem>
                     ))}
                 </DropdownMenuContent>

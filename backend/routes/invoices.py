@@ -93,11 +93,14 @@ def _append_event(doc, status, note, actor):
 
 @router.get("")
 async def list_invoices(ctx=Depends(require_tenant), status: Optional[str] = None,
+                        company_id: Optional[str] = None,
                         limit: int = 100, skip: int = 0):
     db = get_db()
     q = {"tenant_id": ctx["tenant_id"]}
     if status:
         q["status"] = status
+    if company_id:
+        q["company_id"] = company_id
     proj = {"invoice_number": 1, "invoice_type": 1, "invoice_date": 1,
             "due_date": 1, "currency": 1, "customer_snapshot": 1, "status": 1,
             "subtotal": 1, "tax_total": 1, "total": 1, "government.uuid": 1,

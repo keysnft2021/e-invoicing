@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/stats")
-async def stats(ctx=Depends(require_tenant)):
+async def stats(ctx=Depends(require_tenant), company_id: str | None = None):
     """One aggregation pipeline returns status breakdown, today's count, and
     14-day trend — three previous queries collapsed to one."""
     db = get_db()
@@ -16,9 +16,12 @@ async def stats(ctx=Depends(require_tenant)):
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
     window_start = (now - timedelta(days=13)).date().isoformat()
+    base_match = {"tenant_id": tenant_id}
+    if company_id:
+        base_match["company_id"] = company_id
 
     pipeline = [
-        {"$match": {"tenant_id": tenant_id}},
+        {"$match": base_match},
         {"$facet": {
             "by_status": [
                 {"$group": {"_id": "$status", "count": {"$sum": 1},
