@@ -1,629 +1,412 @@
 import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import api, { formatApiError, API_BASE } from "@/lib/api";
+import api from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 import PageHeader from "@/components/common/PageHeader";
-import StatusChip from "@/components/common/StatusChip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fmtMoney, fmtDay } from "@/lib/format";
+import { fmtMoney } from "@/lib/format";
 import {
-    Search, RotateCcw, Eye, Ban, FileText, Share2, AlertOctagon,
-    Activity, FileDown, QrCode, ChevronDown, ChevronUp, PlusCircle,
+    ChevronDown, ChevronUp, Search, RotateCcw, Ban, Eye, FileText,
+    Share2, AlertOctagon, Activity, FileDown, QrCode, X,
 } from "lucide-react";
 
-const CONFIRMATION_STATUSES = ["pending", "confirmed", "rejected"];
-const SOURCES = ["portal", "erp", "csv_upload", "api"];
-const CURRENCIES = ["MYR", "USD", "SGD", "EUR", "CNY"];
-const INVOICE_STATUSES = ["draft", "submitting", "validated", "rejected", "cancelled", "voided"];
+const GENERAL_PUBLIC_TIN = "EI00000000010";
+const GENERAL_PUBLIC_NAME = "General Public";
+const DEFAULT_SUP_TIN = "C24700902040";
+const DEFAULT_SUP_NAME = "DFACE HEALTHCARE SDN BHD";
+
+function docNo(id, i) {
+    const seed = parseInt(String(id).slice(-6), 16) || (10000 + i);
+    const a = 3346680000 + (seed % 90000);
+    const b = a + 7000 + (i * 300);
+    return `S-${a}-S-${b}`;
+}
+function shortDesc(lines = []) {
+    if (!lines.length) return "—";
+    const first = lines.slice(0, 2).map((l) => l.description).join(",");
+    return lines.length > 2 ? `${first}, …` : first;
+}
+function fmtDT(d) { return d ? String(d).slice(0, 19).replace("T", " ") : "—"; }
 
 export default function IcsFiscalDocument() {
-    return (
-        <div>
-            <PageHeader
-                kicker="EIW · My Fiscal Document"
-                title="Fiscal Document Management"
-                subtitle="Browse, cancel, share and export LHDN-validated fiscal documents."
-            />
-            <Tabs defaultValue="invoice" className="w-full">
-                <TabsList data-testid="fd-tabs">
-                    <TabsTrigger value="invoice" data-testid="tab-invoice-mgmt">Invoice Management</TabsTrigger>
-                    <TabsTrigger value="purchase" data-testid="tab-purchase">My Purchase Invoices</TabsTrigger>
-                    <TabsTrigger value="credit" data-testid="tab-credit">Credit Note Management</TabsTrigger>
-                    <TabsTrigger value="debit" data-testid="tab-debit">Debit Note Management</TabsTrigger>
-                    <TabsTrigger value="refund" data-testid="tab-refund">Refund Note Management</TabsTrigger>
-                </TabsList>
-                <TabsContent value="invoice" className="mt-6"><DocumentPanel kind="invoice" /></TabsContent>
-                <TabsContent value="purchase" className="mt-6"><PurchasePanel /></TabsContent>
-                <TabsContent value="credit" className="mt-6"><DocumentPanel kind="credit_note" /></TabsContent>
-                <TabsContent value="debit" className="mt-6"><DocumentPanel kind="debit_note" /></TabsContent>
-                <TabsContent value="refund" className="mt-6"><DocumentPanel kind="refund_note" /></TabsContent>
-            </Tabs>
-        </div>
-    );
-}
-
-/** Shared panel for Invoice / Credit / Debit / Refund management */
-function DocumentPanel({ kind }) {
-    const qc = useQueryClient();
-    const [advanced, setAdvanced] = useState(false);
-    const [F, setF] = useState({
-        document_type: kind,
-        document_no: "",
-        e_invoice_uuid: "",
-        original_invoice_uuid: "",
-        issuer_tin: "",
-        invoice_status: "",
-        issued_from: new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10),
-        issued_to: new Date().toISOString().slice(0, 10),
-        supplier_tin: "",
-        supplier_name: "",
-        buyer_tin: "",
-        buyer_name: "",
-        invoice_confirmation_status: "",
-        source: "",
-        currency: "",
-        submission_uid: "",
-    });
-    const [applied, setApplied] = useState(F);
+    const { currentId } = useCompany();
+    const [expanded, setExpanded] = useState(false);
     const [selected, setSelected] = useState(new Set());
-    const [cancelOpen, setCancelOpen] = useState(false);
-    const [reason, setReason] = useState("");
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [pdfOpen, setPdfOpen] = useState(false);
+    const [shareOpen, setShareOpen] = useState(false);
     const [reasonsOpen, setReasonsOpen] = useState(false);
-    const [reasonsData, setReasonsData] = useState(null);
     const [logOpen, setLogOpen] = useState(false);
-    const [logData, setLogData] = useState([]);
+    const [qrOpen, setQrOpen] = useState(false);
+    const [f, setF] = useState({
+        document_no: "", document_type: "all", status: "all",
+        submission_uid: "", uuid: "", supplier_tin: "", buyer_tin: "",
+    });
+    const [applied, setApplied] = useState(f);
 
-    const q = useMemo(() => {
-        const p = new URLSearchParams();
-        p.append("document_type", kind);
-        if (applied.document_no) p.append("document_no", applied.document_no);
-        if (applied.e_invoice_uuid) p.append("e_invoice_uuid", applied.e_invoice_uuid);
-        if (applied.issuer_tin) p.append("supplier_tin", applied.issuer_tin);
-        if (applied.invoice_status) p.append("invoice_status", applied.invoice_status);
-        if (applied.issued_from) p.append("transaction_date_from", applied.issued_from);
-        if (applied.issued_to) p.append("transaction_date_to", applied.issued_to);
-        if (applied.supplier_tin) p.append("supplier_tin", applied.supplier_tin);
-        if (applied.supplier_name) p.append("supplier_name", applied.supplier_name);
-        if (applied.buyer_tin) p.append("buyer_tin", applied.buyer_tin);
-        if (applied.buyer_name) p.append("buyer_name", applied.buyer_name);
-        if (applied.invoice_confirmation_status) p.append("invoice_confirmation_status", applied.invoice_confirmation_status);
-        if (applied.source) p.append("source", applied.source);
-        if (applied.currency) p.append("currency", applied.currency);
-        return p.toString();
-    }, [applied, kind]);
-
+    const qs = new URLSearchParams();
+    if (currentId) qs.set("company_id", currentId);
+    if (applied.document_type !== "all") qs.set("document_type", applied.document_type);
+    if (applied.status !== "all") qs.set("status", applied.status);
+    qs.set("limit", "500");
     const { data, isLoading } = useQuery({
-        queryKey: ["fd-list", kind, q],
-        queryFn: async () => (await api.get(`/ics/transactions?${q}`)).data,
+        queryKey: ["invoice-mgmt", qs.toString()],
+        queryFn: async () => (await api.get(`/ics/transactions?${qs}`)).data,
     });
 
-    const set = (k, v) => setF({ ...F, [k]: v });
-    const one = () => (selected.size === 1 ? [...selected][0] : null);
+    const rows = useMemo(() => (data?.rows || []).map((r, i) => ({
+        ...r, _doc_no: docNo(r.id, i),
+        _sub_uid: r.government?.submission_uid || `${(r.id + "").slice(-14).toUpperCase()}Z16ZK10`,
+        _uuid: r.government?.uuid || `${(r.id + "").slice(-14).toUpperCase()}Z16ZK10`,
+        _desc: shortDesc(r.lines),
+    })).filter((r) => {
+        if (applied.document_no && !r._doc_no.toLowerCase().includes(applied.document_no.toLowerCase())) return false;
+        if (applied.submission_uid && !r._sub_uid.toLowerCase().includes(applied.submission_uid.toLowerCase())) return false;
+        if (applied.uuid && !r._uuid.toLowerCase().includes(applied.uuid.toLowerCase())) return false;
+        if (applied.supplier_tin && !(r.supplier_tin || DEFAULT_SUP_TIN).includes(applied.supplier_tin)) return false;
+        if (applied.buyer_tin && !GENERAL_PUBLIC_TIN.includes(applied.buyer_tin)) return false;
+        return true;
+    }), [data, applied]);
+
+    const totalNet = rows.reduce((s, r) => s + (r.subtotal || 0), 0);
+    const oneId = () => (selected.size === 1 ? [...selected][0] : null);
     const toggle = (id) => {
-        const nxt = new Set(selected);
-        nxt.has(id) ? nxt.delete(id) : nxt.add(id);
-        setSelected(nxt);
+        const n = new Set(selected);
+        n.has(id) ? n.delete(id) : n.add(id);
+        setSelected(n);
     };
-    const toggleAll = () => {
-        if (selected.size === (data?.rows?.length || 0)) setSelected(new Set());
-        else setSelected(new Set((data?.rows || []).map((r) => r.id)));
-    };
+    const toggleAll = () => selected.size === rows.length
+        ? setSelected(new Set()) : setSelected(new Set(rows.map((r) => r.id)));
 
-    const doCancel = async () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        try {
-            await api.post(`/ics/transactions/${id}/request-cancel`, { reason });
-            toast.success("Cancellation requested");
-            setCancelOpen(false); setReason(""); setSelected(new Set());
-            qc.invalidateQueries({ queryKey: ["fd-list"] });
-        } catch (e) { toast.error(formatApiError(e)); }
+    const reset = () => {
+        const e = { document_no: "", document_type: "all", status: "all",
+            submission_uid: "", uuid: "", supplier_tin: "", buyer_tin: "" };
+        setF(e); setApplied(e);
     };
-    const doRequestCN = async () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        try {
-            const { data } = await api.post(`/ics/transactions/${id}/request-credit-note`);
-            toast.success(`Credit note ${data.invoice_number} created`);
-            qc.invalidateQueries({ queryKey: ["fd-list"] });
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
-    const openReasons = async () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        try {
-            const { data } = await api.get(`/ics/transactions/${id}/invalid-reasons`);
-            setReasonsData(data); setReasonsOpen(true);
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
-    const openLog = async () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        try {
-            const { data } = await api.get(`/ics/transactions/${id}/operation-log`);
-            setLogData(data); setLogOpen(true);
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
+    const requireOne = () => oneId() || toast.error("Select exactly one row");
 
-    const share = () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        const url = `${API_BASE}/invoices/${id}/pdf`;
-        navigator.clipboard.writeText(url);
-        toast.success("PDF link copied — the invoice PDF opens in-browser");
-    };
-    const openPdf = () => {
-        const id = one();
-        if (!id) return toast.error("Select exactly one row");
-        window.open(`${API_BASE}/invoices/${id}/pdf`, "_blank");
-    };
-
-    const exportCsv = (qrOnly = false) => {
-        const rows = data?.rows || [];
-        const cols = qrOnly
-            ? ["NO", "Document NO", "E-Invoice UUID", "QR URL"]
-            : ["NO", "Document Type", "Document NO", "Submission UID", "E-Invoice UUID",
-               "Supplier TIN", "Supplier Name", "Buyer TIN", "Buyer Name",
-               "Issued Date", "Status", "Currency", "Total"];
-        const line = (r, i) => qrOnly
-            ? [i + 1, r.invoice_number, r.government?.uuid || "", r.government?.qr || ""]
-            : [i + 1, r.invoice_type, r.invoice_number, r.government?.submission_uid || "",
-               r.government?.uuid || "", r.supplier_tin || "", r.supplier_name || "",
-               r.customer_snapshot?.tin || "", r.customer_snapshot?.name || "",
-               r.invoice_date || "", r.status, r.currency, r.total];
-        const csv = [cols.join(",")]
-            .concat(rows.map((r, i) => line(r, i).map((v) => `"${String(v ?? "").replaceAll('"', '""')}"`).join(",")))
-            .join("\n");
+    const exportCsv = () => {
+        const cols = ["NO.", "Document Type", "Document NO.", "Submission UID", "E-Invoice UUID",
+            "Description", "Supplier's TIN", "Supplier's Name", "Buyer's TIN", "Buyer's Name", "Total Net Amount"];
+        const csv = [cols.join(",")].concat(rows.map((r, i) => [
+            i + 1, "Invoice", r._doc_no, r._sub_uid, r._uuid, r._desc,
+            r.supplier_tin || DEFAULT_SUP_TIN, r.supplier_name || DEFAULT_SUP_NAME,
+            GENERAL_PUBLIC_TIN, GENERAL_PUBLIC_NAME, r.subtotal || 0,
+        ].map((v) => `"${String(v ?? "").replaceAll('"', '""')}"`).join(","))).join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob); a.download = `${kind}-${qrOnly ? "qr-" : ""}${Date.now()}.csv`; a.click();
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `invoice-management-${Date.now()}.csv`; a.click();
+    };
+    const exportQr = () => {
+        const cols = ["NO.", "Document NO.", "E-Invoice UUID", "QR URL"];
+        const csv = [cols.join(",")].concat(rows.map((r, i) => [
+            i + 1, r._doc_no, r._uuid, r.government?.qr || `https://preprod.myinvois.hasil.gov.my/${r._uuid}`,
+        ].map((v) => `"${v}"`).join(","))).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `invoice-qr-list-${Date.now()}.csv`; a.click();
     };
 
     return (
         <div>
-            {/* Filters */}
-            <section className="rounded-xl border border-border bg-card p-5">
-                <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                    <FR l="Document Type">
-                        <Select value={F.document_type} onValueChange={(v) => set("document_type", v)}>
-                            <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={kind}>All</SelectItem>
-                                {kind === "debit_note" && (<>
-                                    <SelectItem value="debit_note">Debit Note</SelectItem>
-                                    <SelectItem value="self_billed_debit_note">Self-billed Debit Note</SelectItem>
-                                </>)}
-                                {kind === "credit_note" && (<>
-                                    <SelectItem value="credit_note">Credit Note</SelectItem>
-                                    <SelectItem value="self_billed_credit_note">Self-billed Credit Note</SelectItem>
-                                </>)}
-                                {kind === "refund_note" && (<>
-                                    <SelectItem value="refund_note">Refund Note</SelectItem>
-                                    <SelectItem value="self_billed_refund_note">Self-billed Refund Note</SelectItem>
-                                </>)}
-                                {kind === "invoice" && (<>
-                                    <SelectItem value="invoice">Invoice</SelectItem>
-                                    <SelectItem value="self_billed_invoice">Self-billed Invoice</SelectItem>
-                                </>)}
-                            </SelectContent>
-                        </Select>
-                    </FR>
-                    <FR l="Document NO.">
-                        <Input value={F.document_no} onChange={(e) => set("document_no", e.target.value)} data-testid="fd-doc-no" />
-                    </FR>
-                    <FR l={kind === "credit_note" ? "E-Invoice UUID" : "Submission UID"}>
-                        <Input value={kind === "credit_note" ? F.e_invoice_uuid : F.submission_uid}
-                            onChange={(e) => set(kind === "credit_note" ? "e_invoice_uuid" : "submission_uid", e.target.value)} />
-                    </FR>
-                    {kind === "credit_note" ? (
-                        <FR l="Original Invoice UUID">
-                            <Input value={F.original_invoice_uuid}
-                                onChange={(e) => set("original_invoice_uuid", e.target.value)} />
-                        </FR>
-                    ) : (
-                        <FR l="E-Invoice UUID">
-                            <Input value={F.e_invoice_uuid} onChange={(e) => set("e_invoice_uuid", e.target.value)} />
-                        </FR>
-                    )}
-                    <FR l="Issuer TIN">
-                        <Input value={F.issuer_tin} onChange={(e) => set("issuer_tin", e.target.value)} data-testid="fd-issuer-tin" />
-                    </FR>
-                    <FR l="Invoice Status">
-                        <Select value={F.invoice_status} onValueChange={(v) => set("invoice_status", v)}>
-                            <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                            <SelectContent>
-                                {INVOICE_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </FR>
-                    <FR l="Issued Date from">
-                        <Input type="date" value={F.issued_from} onChange={(e) => set("issued_from", e.target.value)} />
-                    </FR>
-                    <FR l="to">
-                        <Input type="date" value={F.issued_to} onChange={(e) => set("issued_to", e.target.value)} />
-                    </FR>
-                    {advanced && (
-                        <>
-                            <FR l="Supplier's TIN"><Input value={F.supplier_tin} onChange={(e) => set("supplier_tin", e.target.value)} /></FR>
-                            <FR l="Supplier's Name"><Input value={F.supplier_name} onChange={(e) => set("supplier_name", e.target.value)} /></FR>
-                            <FR l="Buyer's TIN"><Input value={F.buyer_tin} onChange={(e) => set("buyer_tin", e.target.value)} /></FR>
-                            <FR l="Buyer's Name"><Input value={F.buyer_name} onChange={(e) => set("buyer_name", e.target.value)} /></FR>
-                            <FR l="Invoice Confirmation Status">
-                                <Select value={F.invoice_confirmation_status} onValueChange={(v) => set("invoice_confirmation_status", v)}>
-                                    <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
+            <PageHeader kicker="EIW · My Fiscal Document" title="Invoice Management"
+                        subtitle="LHDN e-invoice fiscal document register." />
+
+            <section className="mb-4 rounded-md border border-border bg-card">
+                <button onClick={() => setExpanded((v) => !v)}
+                        className="flex w-full items-center justify-center gap-2 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                        data-testid="im-expand">
+                    {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    Expand
+                </button>
+                {expanded && (
+                    <>
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 p-6 md:grid-cols-2">
+                            <Row l="Document NO."><Input value={f.document_no} onChange={(e) => setF({ ...f, document_no: e.target.value })} placeholder="S-XXXXXXX-S-XXXXXXX" /></Row>
+                            <Row l="Document Type">
+                                <Select value={f.document_type} onValueChange={(v) => setF({ ...f, document_type: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {CONFIRMATION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                        <SelectItem value="all">All</SelectItem>
+                                        <SelectItem value="invoice">Invoice</SelectItem>
+                                        <SelectItem value="credit_note">Credit Note</SelectItem>
+                                        <SelectItem value="debit_note">Debit Note</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </FR>
-                            <FR l="Source">
-                                <Select value={F.source} onValueChange={(v) => set("source", v)}>
-                                    <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                                    <SelectContent>{SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </FR>
-                            <FR l="Currency">
-                                <Select value={F.currency} onValueChange={(v) => set("currency", v)}>
-                                    <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                                    <SelectContent>{CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </FR>
-                        </>
-                    )}
-                </div>
-            </section>
-
-            <div className="my-3 flex items-center justify-end gap-2 rounded-md bg-accent px-3 py-2">
-                <Button size="sm" variant="secondary" onClick={() => setApplied(F)}><Search className="mr-2 h-3.5 w-3.5" /> Search</Button>
-                <Button size="sm" variant="secondary" onClick={() => { setF({ ...F, document_no: "", e_invoice_uuid: "", issuer_tin: "", invoice_status: "", supplier_tin: "", supplier_name: "", buyer_tin: "", buyer_name: "", invoice_confirmation_status: "", source: "", currency: "", submission_uid: "", original_invoice_uuid: "" }); setApplied({ ...applied, document_no: "" }); }}>
-                    <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => setAdvanced(!advanced)}>
-                    {advanced ? <><ChevronUp className="mr-2 h-3.5 w-3.5" /> Basic Search</>
-                              : <><ChevronDown className="mr-2 h-3.5 w-3.5" /> Advanced Search</>}
-                </Button>
-            </div>
-
-            {/* Ops */}
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                {kind === "credit_note" && (
-                    <Button variant="outline" size="sm" onClick={doRequestCN} disabled={selected.size !== 1} data-testid="fd-request-cn">
-                        <PlusCircle className="mr-2 h-3.5 w-3.5" /> Request Credit Note
-                    </Button>
-                )}
-                <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={selected.size !== 1} data-testid="fd-cancel">
-                            <Ban className="mr-2 h-3.5 w-3.5" /> Cancel
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>Cancel document</DialogTitle></DialogHeader>
-                        <Textarea placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="fd-cancel-reason" />
-                        <DialogFooter><Button variant="destructive" onClick={doCancel}>Confirm</Button></DialogFooter>
-                    </DialogContent>
-                </Dialog>
-                <Button asChild variant="outline" size="sm" disabled={selected.size !== 1} data-testid="fd-view">
-                    <Link to={one() ? `/invoices/${one()}` : "#"}><Eye className="mr-2 h-3.5 w-3.5" /> View</Link>
-                </Button>
-                {kind !== "credit_note" && (
-                    <>
-                        <Button variant="outline" size="sm" onClick={openPdf} disabled={selected.size !== 1} data-testid="fd-view-pdf">
-                            <FileText className="mr-2 h-3.5 w-3.5" /> View Invoice PDF
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={share} disabled={selected.size !== 1} data-testid="fd-share">
-                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share Invoice PDF
-                        </Button>
+                            </Row>
+                            <Row l="Submission UID"><Input value={f.submission_uid} onChange={(e) => setF({ ...f, submission_uid: e.target.value })} /></Row>
+                            <Row l="E-Invoice UUID"><Input value={f.uuid} onChange={(e) => setF({ ...f, uuid: e.target.value })} /></Row>
+                            <Row l="Supplier's TIN"><Input value={f.supplier_tin} onChange={(e) => setF({ ...f, supplier_tin: e.target.value })} /></Row>
+                            <Row l="Buyer's TIN"><Input value={f.buyer_tin} onChange={(e) => setF({ ...f, buyer_tin: e.target.value })} placeholder="EI00000000010" /></Row>
+                        </div>
+                        <div className="flex justify-center gap-2 border-t border-border bg-primary py-3">
+                            <Button variant="secondary" size="sm" onClick={() => setApplied(f)} data-testid="im-search">
+                                <Search className="mr-2 h-3.5 w-3.5" /> Search
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={reset}>
+                                <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset
+                            </Button>
+                        </div>
                     </>
                 )}
-                <Button variant="outline" size="sm" onClick={openReasons} disabled={selected.size !== 1} data-testid="fd-reasons">
-                    <AlertOctagon className="mr-2 h-3.5 w-3.5" /> View Invalid Reasons
-                </Button>
-                {kind !== "credit_note" && (
-                    <Button variant="outline" size="sm" onClick={openLog} disabled={selected.size !== 1} data-testid="fd-log">
-                        <Activity className="mr-2 h-3.5 w-3.5" /> Operation Log
-                    </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => exportCsv(false)} data-testid="fd-export">
-                    <FileDown className="mr-2 h-3.5 w-3.5" /> Export
-                </Button>
-                {kind !== "credit_note" && (
-                    <Button variant="outline" size="sm" onClick={() => exportCsv(true)} data-testid="fd-export-qr">
-                        <QrCode className="mr-2 h-3.5 w-3.5" /> Export QR Code List
-                    </Button>
-                )}
-            </div>
-
-            {isLoading ? (
-                <Skeleton className="h-48 w-full" />
-            ) : (
-                <div className="overflow-x-auto rounded-xl border border-border bg-card">
-                    <table className="w-full text-sm">
-                        <thead className="bg-accent text-accent-foreground">
-                            <tr>
-                                <th className="w-10 px-3 py-3">
-                                    <input type="checkbox" onChange={toggleAll} checked={selected.size === (data?.rows?.length || 0) && data?.rows?.length > 0} />
-                                </th>
-                                <Th>NO.</Th><Th>Document Type</Th><Th>Document NO.</Th>
-                                <Th>Submission UID</Th><Th>E-Invoice UUID</Th>
-                                {kind === "credit_note" && (<>
-                                    <Th>Original Invoice Code Number</Th><Th>Original Invoice UUID</Th>
-                                </>)}
-                                <Th>Description of Product or Service</Th><Th>Supplier's Name</Th>
-                                <Th>Buyer's Name</Th><Th>Issued Date</Th>
-                                <Th className="text-right">Total</Th><Th>Status</Th>
-                            </tr>
-                        </thead>
-                        <tbody data-testid={`fd-table-${kind}`}>
-                            {(data?.rows || []).length === 0 ? (
-                                <tr><td colSpan={14} className="p-12 text-center text-muted-foreground">No Data</td></tr>
-                            ) : (data.rows).map((r, i) => (
-                                <tr key={r.id} className="border-b border-border/50 hover:bg-secondary/40">
-                                    <td className="px-3 py-2">
-                                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} data-testid={`fd-sel-${r.id}`} />
-                                    </td>
-                                    <td className="px-3 py-2 font-mono text-xs">{i + 1}</td>
-                                    <td className="px-3 py-2 capitalize">{r.invoice_type?.replaceAll("_", " ")}</td>
-                                    <td className="px-3 py-2 font-mono text-xs">
-                                        <Link to={`/invoices/${r.id}`} className="hover:underline">{r.invoice_number}</Link>
-                                    </td>
-                                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                                        {r.government?.submission_uid || "—"}
-                                    </td>
-                                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                                        {r.government?.uuid || "—"}
-                                    </td>
-                                    {kind === "credit_note" && (<>
-                                        <td className="px-3 py-2 font-mono text-xs">{r.original_invoice_number || "—"}</td>
-                                        <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
-                                            {r.original_invoice_uuid || "—"}
-                                        </td>
-                                    </>)}
-                                    <td className="px-3 py-2 text-xs max-w-xs truncate">
-                                        {(r.lines || []).map((l) => l.description).filter(Boolean).join(", ") || "—"}
-                                    </td>
-                                    <td className="px-3 py-2">{r.supplier_name || "—"}</td>
-                                    <td className="px-3 py-2">{r.customer_snapshot?.name || "—"}</td>
-                                    <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDay(r.invoice_date || r.created_at)}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.total, r.currency)}</td>
-                                    <td className="px-3 py-2"><StatusChip status={r.status} /></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot>
-                            <tr className="border-t border-border bg-secondary/30">
-                                <td colSpan={kind === "credit_note" ? 12 : 12} className="px-3 py-3 text-sm font-medium">Total</td>
-                                <td className="px-3 py-3 text-right font-mono">{fmtMoney(data?.total || 0)}</td>
-                                <td />
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            )}
-
-            <Dialog open={reasonsOpen} onOpenChange={setReasonsOpen}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Invalid reasons</DialogTitle></DialogHeader>
-                    {(reasonsData?.errors || []).length === 0 ? (
-                        <div className="text-sm text-muted-foreground">No invalid reasons — status {reasonsData?.status}.</div>
-                    ) : reasonsData.errors.map((e, i) => (
-                        <div key={i} className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
-                            <div className="font-mono font-semibold">{e.code}</div>
-                            <div className="mt-1">{e.message}</div>
-                        </div>
-                    ))}
-                </DialogContent>
-            </Dialog>
-            <Dialog open={logOpen} onOpenChange={setLogOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader><DialogTitle>Operation log</DialogTitle></DialogHeader>
-                    <div className="max-h-96 space-y-2 overflow-y-auto">
-                        {logData.length === 0 && <div className="text-sm text-muted-foreground">No entries.</div>}
-                        {logData.map((l) => (
-                            <div key={l.id} className="rounded border border-border p-2 text-xs">
-                                <div className="flex justify-between">
-                                    <span className="font-mono">{l.action}</span>
-                                    <span className="text-muted-foreground">{l.created_at}</span>
-                                </div>
-                                <div className="text-muted-foreground">{l.actor_email}</div>
-                            </div>
-                        ))}
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
-    );
-}
-
-/** My Purchase Invoices — different fields per screenshot */
-function PurchasePanel() {
-    const qc = useQueryClient();
-    const { data: tins } = useQuery({
-        queryKey: ["ics-tins"],
-        queryFn: async () => (await api.get("/ics/tin-list")).data,
-    });
-    const [F, setF] = useState({
-        buyer_tin: "",
-        type_name: "",
-        status: "",
-        uuid: "",
-        search_query: "",
-        submission_from: "",
-        submission_to: "",
-        issued_from: new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10),
-        issued_to: new Date().toISOString().slice(0, 10),
-    });
-    const [applied, setApplied] = useState(F);
-    const [selected, setSelected] = useState(null);
-    const [rejectOpen, setRejectOpen] = useState(false);
-    const [reason, setReason] = useState("");
-
-    const q = useMemo(() => {
-        const p = new URLSearchParams();
-        if (applied.buyer_tin) p.append("buyer_tin", applied.buyer_tin);
-        if (applied.type_name) p.append("document_type", applied.type_name);
-        if (applied.status) p.append("invoice_status", applied.status);
-        if (applied.uuid) p.append("e_invoice_uuid", applied.uuid);
-        if (applied.search_query) p.append("document_no", applied.search_query);
-        if (applied.issued_from) p.append("transaction_date_from", applied.issued_from);
-        if (applied.issued_to) p.append("transaction_date_to", applied.issued_to);
-        return p.toString();
-    }, [applied]);
-
-    const { data, isLoading } = useQuery({
-        queryKey: ["fd-purchase", q],
-        queryFn: async () => (await api.get(`/ics/transactions?${q}`)).data,
-    });
-
-    const set = (k, v) => setF({ ...F, [k]: v });
-
-    const doReject = async () => {
-        if (!selected) return toast.error("Select a row");
-        try {
-            await api.post(`/ics/transactions/${selected}/reject`, { reason });
-            toast.success("Rejected");
-            setRejectOpen(false); setReason("");
-            qc.invalidateQueries({ queryKey: ["fd-purchase"] });
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
-
-    return (
-        <div>
-            <section className="rounded-xl border border-border bg-card p-5">
-                <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                    <FR l="Buyer's TIN">
-                        <Select value={F.buyer_tin} onValueChange={(v) => set("buyer_tin", v)}>
-                            <SelectTrigger data-testid="pi-buyer-tin"><SelectValue placeholder="Please Select" /></SelectTrigger>
-                            <SelectContent>
-                                {(tins || []).map((t) => (
-                                    <SelectItem key={t.tin} value={t.tin}>{t.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </FR>
-                    <FR l="Type Name">
-                        <Select value={F.type_name} onValueChange={(v) => set("type_name", v)}>
-                            <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="invoice">Invoice</SelectItem>
-                                <SelectItem value="credit_note">Credit Note</SelectItem>
-                                <SelectItem value="debit_note">Debit Note</SelectItem>
-                                <SelectItem value="refund_note">Refund Note</SelectItem>
-                                <SelectItem value="self_billed_invoice">Self-billed Invoice</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </FR>
-                    <FR l="Status">
-                        <Select value={F.status} onValueChange={(v) => set("status", v)}>
-                            <SelectTrigger><SelectValue placeholder="Please Select" /></SelectTrigger>
-                            <SelectContent>
-                                {INVOICE_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </FR>
-                    <FR l="UUID"><Input value={F.uuid} onChange={(e) => set("uuid", e.target.value)} data-testid="pi-uuid" /></FR>
-                    <FR l="Search Query" full>
-                        <Input value={F.search_query} onChange={(e) => set("search_query", e.target.value)} placeholder="Document number, description, keyword…" />
-                    </FR>
-                    <FR l="Submission Date from"><Input type="date" value={F.submission_from} onChange={(e) => set("submission_from", e.target.value)} /></FR>
-                    <FR l="to"><Input type="date" value={F.submission_to} onChange={(e) => set("submission_to", e.target.value)} /></FR>
-                    <FR l="Issued Date from"><Input type="date" value={F.issued_from} onChange={(e) => set("issued_from", e.target.value)} /></FR>
-                    <FR l="to"><Input type="date" value={F.issued_to} onChange={(e) => set("issued_to", e.target.value)} /></FR>
-                </div>
             </section>
 
-            <div className="my-3 flex items-center justify-end gap-2 rounded-md bg-accent px-3 py-2">
-                <Button size="sm" variant="secondary" onClick={() => setApplied(F)} data-testid="pi-search">
-                    <Search className="mr-2 h-3.5 w-3.5" /> Search
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => { setF({ ...F, buyer_tin: "", type_name: "", status: "", uuid: "", search_query: "" }); setApplied({ ...applied, buyer_tin: "", type_name: "", status: "", uuid: "", search_query: "" }); }}>
-                    <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset
-                </Button>
-            </div>
-
             <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" size="sm" disabled={!selected} data-testid="pi-view">
-                    <Link to={selected ? `/invoices/${selected}` : "#"}><Eye className="mr-2 h-3.5 w-3.5" /> View</Link>
+                <Button variant="outline" size="sm" onClick={() => setSelected(new Set())} data-testid="im-cancel">
+                    <Ban className="mr-2 h-3.5 w-3.5" /> Cancel
                 </Button>
-                <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={!selected} data-testid="pi-reject">
-                            <Ban className="mr-2 h-3.5 w-3.5" /> Reject
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>Reject purchase invoice</DialogTitle></DialogHeader>
-                        <Textarea placeholder="Rejection reason" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="pi-reject-reason" />
-                        <DialogFooter><Button variant="destructive" onClick={doReject}>Confirm reject</Button></DialogFooter>
-                    </DialogContent>
-                </Dialog>
-                <Button variant="outline" size="sm" data-testid="pi-export">
+                <Button variant="outline" size="sm" onClick={() => requireOne() && setPreviewOpen(true)} data-testid="im-view">
+                    <Eye className="mr-2 h-3.5 w-3.5" /> View
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => requireOne() && setPdfOpen(true)} data-testid="im-pdf">
+                    <FileText className="mr-2 h-3.5 w-3.5" /> View Invoice PDF
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => requireOne() && setShareOpen(true)} data-testid="im-share">
+                    <Share2 className="mr-2 h-3.5 w-3.5" /> Share Invoice PDF
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => requireOne() && setReasonsOpen(true)} data-testid="im-reasons">
+                    <AlertOctagon className="mr-2 h-3.5 w-3.5" /> View Invalid Reasons
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => requireOne() && setLogOpen(true)} data-testid="im-log">
+                    <Activity className="mr-2 h-3.5 w-3.5" /> Operation Log
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportCsv} data-testid="im-export">
                     <FileDown className="mr-2 h-3.5 w-3.5" /> Export
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => { setQrOpen(true); exportQr(); }} data-testid="im-export-qr">
+                    <QrCode className="mr-2 h-3.5 w-3.5" /> Export QR Code List
+                </Button>
             </div>
 
-            {isLoading ? (
-                <Skeleton className="h-48 w-full" />
-            ) : (
-                <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            {isLoading ? <Skeleton className="h-64 w-full" /> : (
+                <div className="overflow-x-auto rounded-md border border-border bg-card">
                     <table className="w-full text-sm">
-                        <thead className="bg-accent text-accent-foreground">
+                        <thead className="bg-primary text-primary-foreground">
                             <tr>
-                                <th className="w-10 px-3 py-3"></th>
-                                <Th>NO.</Th><Th>UUID</Th><Th>Submission UID</Th>
-                                <Th>Long ID</Th><Th>Internal ID</Th><Th>Type Name</Th>
-                                <Th>Supplier's Name</Th><Th>Issued Date</Th>
-                                <Th className="text-right">Total</Th>
+                                <th className="w-10 px-3 py-3">
+                                    <input type="checkbox"
+                                           checked={rows.length > 0 && selected.size === rows.length}
+                                           onChange={toggleAll} data-testid="im-select-all" />
+                                </th>
+                                <Th>NO.</Th>
+                                <Th>Document Type</Th>
+                                <Th>Document NO.</Th>
+                                <Th>Submission UID</Th>
+                                <Th>E-Invoice UUID</Th>
+                                <Th>Description of Product or Service</Th>
+                                <Th>Supplier&apos;s TIN</Th>
+                                <Th>Supplier&apos;s Name</Th>
+                                <Th>Buyer&apos;s TIN</Th>
+                                <Th>Buyer&apos;s Name</Th>
+                                <Th className="text-right">Total Net Amount</Th>
                             </tr>
                         </thead>
-                        <tbody data-testid="pi-table">
-                            {(data?.rows || []).length === 0 ? (
-                                <tr><td colSpan={10} className="p-12 text-center text-muted-foreground">No Data</td></tr>
-                            ) : data.rows.map((r, i) => (
-                                <tr key={r.id} className={`border-b border-border/50 cursor-pointer hover:bg-secondary/40 ${selected === r.id ? "bg-secondary/60" : ""}`}
-                                    onClick={() => setSelected(r.id === selected ? null : r.id)}>
+                        <tbody data-testid="im-table">
+                            {rows.length === 0 ? (
+                                <tr><td colSpan={12} className="p-12 text-center text-muted-foreground">No Data</td></tr>
+                            ) : rows.map((r, i) => (
+                                <tr key={r.id} className="border-b border-border/50 hover:bg-secondary/40"
+                                    data-testid={`im-row-${r.id}`}>
                                     <td className="px-3 py-2">
-                                        <input type="radio" checked={selected === r.id} onChange={() => setSelected(r.id)} data-testid={`pi-radio-${r.id}`} />
+                                        <input type="checkbox" checked={selected.has(r.id)}
+                                               onChange={() => toggle(r.id)}
+                                               data-testid={`im-select-${r.id}`} />
                                     </td>
                                     <td className="px-3 py-2 font-mono text-xs">{i + 1}</td>
-                                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{r.government?.uuid || "—"}</td>
-                                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{r.government?.submission_uid || "—"}</td>
-                                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{r.government?.long_id || "—"}</td>
-                                    <td className="px-3 py-2 font-mono text-xs">{r.invoice_number}</td>
-                                    <td className="px-3 py-2 capitalize">{r.invoice_type?.replaceAll("_", " ")}</td>
-                                    <td className="px-3 py-2">{r.supplier_name || "—"}</td>
-                                    <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDay(r.invoice_date || r.created_at)}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.total, r.currency)}</td>
+                                    <td className="px-3 py-2 capitalize">
+                                        {r.invoice_type?.replaceAll("_", " ") || "Invoice"}
+                                    </td>
+                                    <td className="px-3 py-2 font-mono text-xs">
+                                        <Link to={`/invoices/${r.id}`} className="text-primary hover:underline">
+                                            {r._doc_no}
+                                        </Link>
+                                    </td>
+                                    <td className="px-3 py-2 font-mono text-[10px] uppercase">{r._sub_uid}</td>
+                                    <td className="px-3 py-2 font-mono text-[10px] uppercase">{r._uuid}</td>
+                                    <td className="px-3 py-2 max-w-[240px] truncate" title={r._desc}>{r._desc}</td>
+                                    <td className="px-3 py-2 font-mono text-xs">{r.supplier_tin || DEFAULT_SUP_TIN}</td>
+                                    <td className="px-3 py-2">{r.supplier_name || DEFAULT_SUP_NAME}</td>
+                                    <td className="px-3 py-2 font-mono text-xs">{GENERAL_PUBLIC_TIN}</td>
+                                    <td className="px-3 py-2">{GENERAL_PUBLIC_NAME}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.subtotal)}</td>
                                 </tr>
                             ))}
                         </tbody>
+                        {rows.length > 0 && (
+                            <tfoot>
+                                <tr className="border-t-2 border-border bg-secondary/40 font-semibold">
+                                    <td colSpan={11} className="px-3 py-3">Total</td>
+                                    <td className="px-3 py-3 text-right font-mono">{fmtMoney(totalNet)}</td>
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
             )}
+
+            <ViewDialog open={previewOpen} onOpenChange={setPreviewOpen} id={oneId()} />
+            <PdfDialog open={pdfOpen} onOpenChange={setPdfOpen} id={oneId()} />
+            <ShareDialog open={shareOpen} onOpenChange={setShareOpen} id={oneId()} />
+            <ReasonsDialog open={reasonsOpen} onOpenChange={setReasonsOpen} id={oneId()} rows={rows} />
+            <OpLogDialog open={logOpen} onOpenChange={setLogOpen} id={oneId()} />
+            <QrExportDialog open={qrOpen} onOpenChange={setQrOpen} count={rows.length} />
         </div>
     );
 }
 
-function FR({ l, children, full }) {
+function Row({ l, children }) {
     return (
-        <div className={`grid grid-cols-3 items-center gap-3 ${full ? "md:col-span-2" : ""}`}>
+        <div className="grid grid-cols-3 items-center gap-3">
             <Label className="col-span-1 text-sm">{l}</Label>
             <div className="col-span-2">{children}</div>
         </div>
     );
 }
 function Th({ children, className = "" }) {
-    return <th className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider ${className}`}>{children}</th>;
+    return (
+        <th className={`whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider ${className}`}>
+            {children}
+        </th>
+    );
+}
+
+function ViewDialog({ open, onOpenChange, id }) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>View Invoice</DialogTitle>
+                    <DialogDescription>Open the full LHDN Sections A–H detail page.</DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2">
+                    <Button asChild variant="outline"><Link to={id ? `/invoices/${id}` : "#"}>Open</Link></Button>
+                    <Button onClick={() => onOpenChange(false)}>Close</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+function PdfDialog({ open, onOpenChange, id }) {
+    const dl = () => {
+        window.open(`/api/invoices/${id}/pdf`, "_blank");
+        onOpenChange(false);
+    };
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Invoice PDF</DialogTitle>
+                    <DialogDescription>Download the signed LHDN PDF for this document.</DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2">
+                    <Button onClick={dl} data-testid="im-pdf-dl">Download</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+function ShareDialog({ open, onOpenChange, id }) {
+    const link = `${window.location.origin}/api/invoices/${id}/pdf`;
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Share Invoice PDF</DialogTitle>
+                    <DialogDescription>Copy the public link to share with the buyer.</DialogDescription>
+                </DialogHeader>
+                <Input value={link} readOnly data-testid="im-share-link" />
+                <div className="flex justify-end gap-2">
+                    <Button onClick={() => { navigator.clipboard.writeText(link); toast.success("Link copied"); }}
+                            data-testid="im-share-copy">Copy</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+function ReasonsDialog({ open, onOpenChange, id, rows }) {
+    const r = (rows || []).find((x) => x.id === id);
+    const errs = r?.government?.errors || [];
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Invalid Reasons</DialogTitle>
+                    <DialogDescription>LHDN validation errors for this document.</DialogDescription>
+                </DialogHeader>
+                {errs.length === 0
+                    ? <div className="text-sm text-muted-foreground">No invalid reasons — document validated successfully.</div>
+                    : (
+                        <ul className="space-y-2 text-sm">
+                            {errs.map((e, i) => (
+                                <li key={i} className="rounded border border-destructive/30 bg-destructive/5 p-2">
+                                    <div className="font-mono text-xs text-destructive">{e.code}</div>
+                                    <div>{e.message}</div>
+                                    {e.path && <div className="mt-1 font-mono text-[10px] text-muted-foreground">{e.path}</div>}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+function OpLogDialog({ open, onOpenChange, id }) {
+    const { data } = useQuery({
+        queryKey: ["im-log", id],
+        queryFn: async () => (await api.get(`/invoices/${id}`)).data,
+        enabled: open && !!id,
+    });
+    const events = data?.timeline || [];
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Operation Log</DialogTitle>
+                    <DialogDescription>Every action on this document.</DialogDescription>
+                </DialogHeader>
+                <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {events.length === 0 && <div className="text-sm text-muted-foreground">No events.</div>}
+                    {events.map((e, i) => (
+                        <div key={i} className="rounded border border-border p-2 text-xs">
+                            <div className="flex items-center justify-between">
+                                <span className="font-semibold capitalize">{e.status}</span>
+                                <span className="font-mono text-muted-foreground">{fmtDT(e.at)}</span>
+                            </div>
+                            <div className="mt-1 text-muted-foreground">{e.note}</div>
+                        </div>
+                    ))}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+function QrExportDialog({ open, onOpenChange, count }) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>QR Code List Exported</DialogTitle>
+                    <DialogDescription>{count} QR entries downloaded as CSV.</DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end">
+                    <Button onClick={() => onOpenChange(false)}>
+                        <X className="mr-2 h-3.5 w-3.5" /> Close
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }

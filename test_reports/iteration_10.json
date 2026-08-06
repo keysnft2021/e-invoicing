@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only verification of the rewritten EIW → My Fiscal Document (Invoice Management) page. All 8 review items PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verifications": {
+    "page_header": "PASS — kicker 'EIW · MY FISCAL DOCUMENT', title 'Invoice Management' render at /ics/fiscal-document.",
+    "expand_filter_panel": "PASS — Red bar [data-testid=im-expand] toggles panel showing Document NO., Document Type (All/Invoice/Credit Note/Debit Note), Submission UID, E-Invoice UUID, Supplier's TIN, Buyer's TIN. Search [im-search] and Reset visible.",
+    "toolbar_testids": "PASS — im-cancel, im-view, im-pdf, im-share, im-reasons, im-log, im-export, im-export-qr all present (count=1 each).",
+    "single_row_guard": "PASS — Clicking View with 0 selection shows sonner toast 'Select exactly one row'. Selecting one row + clicking View opens the ViewDialog ([role=dialog]).",
+    "table_12_columns": "PASS — Headers: ['','NO.','DOCUMENT TYPE','DOCUMENT NO.','SUBMISSION UID','E-INVOICE UUID','DESCRIPTION OF PRODUCT OR SERVICE',\"SUPPLIER'S TIN\",\"SUPPLIER'S NAME\",\"BUYER'S TIN\",\"BUYER'S NAME\",'TOTAL NET AMOUNT']. Header bg = red primary. Document NO. rendered as 'S-3346766224-S-3346773224' Link to /invoices/<id>.",
+    "row_pinned_values": "PASS — Every row shows Supplier's TIN=C24700902040, Supplier's Name=DFACE HEALTHCARE SDN BHD, Buyer's TIN=EI00000000010, Buyer's Name=General Public. Submission UID/UUID = 20-char uppercase alphanumerics ending 'Z16ZK10' (e.g. 845EAC619DDEF0Z16ZK10). Description shows line-item preview (e.g. 'Widget A', 'Pilot consultation').",
+    "footer_total": "PASS — tfoot 'Total  RM 34,698.52' across 70 visible rows.",
+    "export_qr_dialog": "PASS — Clicking Export QR Code List downloads CSV and opens dialog 'QR Code List Exported — 70 QR entries downloaded as CSV.'",
+    "export_csv": "PASS (code inspected) — exportCsv builds 11-column CSV (NO., Document Type, Document NO., Submission UID, E-Invoice UUID, Description, Supplier's TIN, Supplier's Name, Buyer's TIN, Buyer's Name, Total Net Amount) with blob download.",
+    "regression_eiw_submenu": "PASS — Sidebar EIW Console lists Dashboard, My Transaction, Consolidated Task, Debit Note Management, My Fiscal Document, Reports, Operation Log Report, Basic Info in the specified order.",
+    "regression_clinic_switcher": "PASS — 'All clinics' switcher present in topbar; company_id query param wired into /api/ics/transactions via qs."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "IcsFiscalDocument.jsx line 78: buyer_tin filter uses `GENERAL_PUBLIC_TIN.includes(applied.buyer_tin)` — since every row has the same pinned buyer TIN, filtering by buyer TIN is effectively binary (matches all or none). Acceptable given the current General-Public data model, but confusing UX.",
+    "Line 187: Export QR button opens the confirmation dialog and triggers download in the same click. If the user cancels the browser download prompt, the dialog still reports 'N QR entries downloaded' — cosmetic wording issue.",
+    "exportCsv/exportQr use `_uuid` synthesized from row.id when government payload is missing (line 70-71). Downstream consumers should not treat these as real LHDN UUIDs — consider labelling the CSV column 'E-Invoice UUID (or synthesized)' or gating export until a real government UUID exists.",
+    "Filter panel has no Status field even though the query still sends `status` when applied.status !== 'all' — dead code path (status is never mutated from UI). Remove or wire a Status filter."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not requested)", "frontend": "100%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (worked)",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Invoice Management page renders 70 rows from /api/ics/transactions with client-side synthesized doc_no, submission_uid, and uuid. Buyer info is hard-pinned to General Public / EI00000000010. All data-testids listed in the review (im-expand, im-search, im-cancel/view/pdf/share/reasons/log/export/export-qr, im-select-all, im-row-<id>, im-select-<id>) are wired."
+}
