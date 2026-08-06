@@ -39,8 +39,8 @@ const ICS_CHILDREN = [
 
 const NAV = [
     { to: "/", label: "Overview", icon: LayoutDashboard, testid: "nav-overview" },
-    { label: "ICS Console", icon: LayoutList, testid: "nav-ics", children: ICS_CHILDREN, matchPath: "/ics" },
-    { to: "/customers", label: "Customers", icon: Users, testid: "nav-customers" },
+    { label: "EIW Console", icon: LayoutList, testid: "nav-ics", children: ICS_CHILDREN, matchPath: "/ics" },
+    { to: "/customers", label: "Buyers", icon: Users, testid: "nav-customers" },
     { to: "/suppliers", label: "Suppliers", icon: Truck, testid: "nav-suppliers" },
     { to: "/products", label: "Products", icon: Package, testid: "nav-products" },
     { to: "/mytax", label: "MyTax / MyInvois", icon: Landmark, testid: "nav-mytax" },

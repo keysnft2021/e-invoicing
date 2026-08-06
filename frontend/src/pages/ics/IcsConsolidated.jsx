@@ -99,7 +99,7 @@ export default function IcsConsolidated() {
     return (
         <div>
             <PageHeader
-                kicker="ICS · My Transaction"
+                kicker="EIW · My Transaction"
                 title="Transaction Consolidated Task"
                 subtitle="Monthly aggregation of transactions per issuer TIN."
             />
@@ -261,7 +261,7 @@ function RunConsolidateForm({ onDone, onCancel }) {
         <div>
             <div className="mb-6">
                 <div className="mb-2 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                    ICS · My Transaction
+                    EIW · My Transaction
                 </div>
                 <h1 className="font-display text-3xl font-semibold">
                     Transaction Consolidated Task <span className="text-muted-foreground">/</span> Run Consolidate Task

@@ -17,7 +17,7 @@ export default function IcsReports() {
     return (
         <div>
             <PageHeader
-                kicker="ICS · Reports"
+                kicker="EIW · Reports"
                 title="Reports"
                 subtitle="Operation logs, sales analytics and government submission reports."
             />

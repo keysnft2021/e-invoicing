@@ -32,7 +32,7 @@ export default function IcsFiscalDocument() {
     return (
         <div>
             <PageHeader
-                kicker="ICS · My Fiscal Document"
+                kicker="EIW · My Fiscal Document"
                 title="Fiscal Document Management"
                 subtitle="Browse, cancel, share and export LHDN-validated fiscal documents."
             />

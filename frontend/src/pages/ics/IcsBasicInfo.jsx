@@ -15,7 +15,7 @@ export default function IcsBasicInfo() {
     return (
         <div>
             <PageHeader
-                kicker="ICS"
+                kicker="EIW"
                 title="Basic Info"
                 subtitle="Company registration, LHDN identifiers, and reference dropdowns used across the console."
             />

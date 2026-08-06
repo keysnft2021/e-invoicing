@@ -18,13 +18,13 @@
         --secondary-foreground: 220 15% 15%;
         --muted: 210 15% 94%;
         --muted-foreground: 220 8% 45%;
-        --accent: 211 100% 50%; /* Vivid #007AFF */
+        --accent: 355 96% 45%; /* Malaysia LHDN red #E30514 */
         --accent-foreground: 0 0% 100%;
         --destructive: 0 74% 50%;
         --destructive-foreground: 0 0% 100%;
         --border: 220 13% 91%;
         --input: 220 13% 91%;
-        --ring: 211 100% 50%;
+        --ring: 355 96% 45%;
         --success: 152 82% 30%;
         --warning: 32 90% 48%;
         --radius: 0.75rem;
@@ -42,13 +42,13 @@
         --secondary-foreground: 210 10% 96%;
         --muted: 224 8% 12%;
         --muted-foreground: 220 6% 60%;
-        --accent: 211 100% 55%;
+        --accent: 355 96% 55%;
         --accent-foreground: 0 0% 100%;
         --destructive: 0 74% 55%;
         --destructive-foreground: 0 0% 100%;
         --border: 224 8% 16%;
         --input: 224 8% 16%;
-        --ring: 211 100% 55%;
+        --ring: 355 96% 55%;
         --success: 152 65% 45%;
         --warning: 32 90% 55%;
     }

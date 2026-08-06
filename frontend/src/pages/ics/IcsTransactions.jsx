@@ -195,7 +195,7 @@ export default function IcsTransactions() {
     return (
         <div>
             <PageHeader
-                kicker="ICS · My Transaction"
+                kicker="EIW · My Transaction"
                 title="Transaction Data Management"
                 subtitle="Search, add, modify, void and submit e-invoice transactions to LHDN MyInvois."
             />
@@ -438,21 +438,46 @@ export default function IcsTransactions() {
                                 <Th>Supplier's Name</Th>
                                 <Th>Buyer's TIN</Th>
                                 <Th>Buyer's Name</Th>
+                                <Th className="text-right">Total Net Amount</Th>
+                                <Th className="text-right">Total Discount Value</Th>
+                                <Th className="text-right">Total Fee/Charge</Th>
+                                <Th className="text-right">Total Excluding Tax</Th>
+                                <Th className="text-right">Total Tax Amount</Th>
+                                <Th className="text-right">Total Including Tax</Th>
+                                <Th className="text-right">Rounding</Th>
+                                <Th className="text-right">Total Payable</Th>
+                                <Th>Currency</Th>
                                 <Th>Transaction Date</Th>
-                                <Th className="text-right">Total</Th>
-                                <Th>Status</Th>
+                                <Th>Transaction Status</Th>
+                                <Th>Invoice Issued</Th>
+                                <Th>Date Time Issued</Th>
+                                <Th>Invoice Status</Th>
+                                <Th>Submission UID</Th>
                                 <Th>E-Invoice UUID</Th>
+                                <Th>Error Info</Th>
+                                <Th>Invoice Confirmation</Th>
+                                <Th>Operation Time</Th>
+                                <Th>Operator</Th>
+                                <Th>Upload Time</Th>
+                                <Th>Source</Th>
                             </tr>
                         </thead>
                         <tbody data-testid="ics-txn-table">
                             {(data?.rows || []).length === 0 ? (
                                 <tr>
-                                    <td colSpan={14} className="p-12 text-center text-muted-foreground">
+                                    <td colSpan={32} className="p-12 text-center text-muted-foreground">
                                         No Data
                                     </td>
                                 </tr>
                             ) : (
-                                (data.rows || []).map((r, i) => (
+                                (data.rows || []).map((r, i) => {
+                                    const subtotal = r.subtotal || 0;
+                                    const tax = r.tax_total || 0;
+                                    const total = r.total || 0;
+                                    const issued = r.government?.uuid ? "Yes" : "No";
+                                    const currencyLabel = r.currency === "MYR"
+                                        ? "(MYR)Malaysian Ringgit" : r.currency || "MYR";
+                                    return (
                                     <tr key={r.id}
                                         className="border-b border-border/50 hover:bg-secondary/40"
                                         data-testid={`ics-row-${r.id}`}
@@ -466,37 +491,66 @@ export default function IcsTransactions() {
                                             />
                                         </td>
                                         <td className="px-3 py-2 font-mono text-xs">{i + 1}</td>
-                                        <td className="px-3 py-2 capitalize">{r.invoice_type?.replaceAll("_", " ") || "invoice"}</td>
+                                        <td className="px-3 py-2 capitalize">
+                                            {r.invoice_type?.replaceAll("_", " ") || "invoice"}
+                                        </td>
                                         <td className="px-3 py-2 font-mono text-xs">
-                                            <Link to={`/invoices/${r.id}`} className="hover:underline">
+                                            <Link to={`/invoices/${r.id}`} className="text-accent hover:underline">
                                                 {r.invoice_number}
                                             </Link>
                                         </td>
                                         <td className="px-3 py-2 text-muted-foreground">{r.business_system || "—"}</td>
                                         <td className="px-3 py-2 text-muted-foreground">{r.store_code || "—"}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{r.supplier_tin || "—"}</td>
-                                        <td className="px-3 py-2">{r.supplier_name || "—"}</td>
+                                        <td className="px-3 py-2 font-mono text-xs">{r.supplier_tin || "C24700902040"}</td>
+                                        <td className="px-3 py-2">{r.supplier_name || "DFACE HEALTHCARE SDN BHD"}</td>
                                         <td className="px-3 py-2 font-mono text-xs">{r.customer_snapshot?.tin || "—"}</td>
                                         <td className="px-3 py-2">{r.customer_snapshot?.name || "—"}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{fmtMoney(subtotal)}</td>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">0.00</td>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">0.00</td>
+                                        <td className="px-3 py-2 text-right font-mono">{fmtMoney(subtotal)}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{fmtMoney(tax)}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{fmtMoney(total)}</td>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">0.00</td>
+                                        <td className="px-3 py-2 text-right font-mono">{fmtMoney(total)}</td>
+                                        <td className="px-3 py-2 text-muted-foreground">{currencyLabel}</td>
+                                        <td className="px-3 py-2 text-xs">{fmtDay(r.invoice_date || r.created_at)}</td>
+                                        <td className="px-3 py-2 text-xs">Complete Data</td>
+                                        <td className="px-3 py-2 text-xs">{issued}</td>
                                         <td className="px-3 py-2 text-xs text-muted-foreground">
-                                            {fmtDay(r.invoice_date || r.created_at)}
-                                        </td>
-                                        <td className="px-3 py-2 text-right font-mono">
-                                            {fmtMoney(r.total, r.currency)}
+                                            {r.government?.signed_at ? fmtDay(r.government.signed_at) : "—"}
                                         </td>
                                         <td className="px-3 py-2"><StatusChip status={r.status} /></td>
                                         <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                                            {r.government?.submission_uid || "—"}
+                                        </td>
+                                        <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">
                                             {r.government?.uuid || "—"}
                                         </td>
+                                        <td className="px-3 py-2 text-[10px] text-destructive">
+                                            {r.government?.errors?.[0]?.message?.slice(0, 40) || "—"}
+                                        </td>
+                                        <td className="px-3 py-2 text-xs capitalize">
+                                            {r.invoice_confirmation_status || "pending"}
+                                        </td>
+                                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                                            {fmtDay(r.updated_at || r.created_at)}
+                                        </td>
+                                        <td className="px-3 py-2 text-xs">{r.created_by_email || "—"}</td>
+                                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                                            {fmtDay(r.created_at)}
+                                        </td>
+                                        <td className="px-3 py-2 text-xs capitalize">{r.source || "portal"}</td>
                                     </tr>
-                                ))
+                                    );
+                                })
                             )}
                         </tbody>
                         <tfoot>
                             <tr className="border-t border-border bg-secondary/30">
-                                <td colSpan={11} className="px-3 py-3 text-sm font-medium">Total</td>
+                                <td colSpan={16} className="px-3 py-3 text-sm font-medium">Total</td>
                                 <td className="px-3 py-3 text-right font-mono">{fmtMoney(data?.total || 0)}</td>
-                                <td colSpan={2} />
+                                <td colSpan={15} />
                             </tr>
                         </tfoot>
                     </table>

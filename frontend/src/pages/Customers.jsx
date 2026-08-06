@@ -59,7 +59,7 @@ export default function Customers() {
         <div>
             <PageHeader
                 kicker="Master data"
-                title="Customers"
+                title="Buyers"
                 subtitle="Manage buyer master data, TIN/BRN, credit limits and payment terms."
                 actions={
                     <Dialog open={open} onOpenChange={setOpen}>
