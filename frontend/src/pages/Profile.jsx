@@ -112,10 +112,13 @@ export function ModifyPasswordDialog({ open, onOpenChange }) {
         setPw({ old: "", next: "", confirm: "" });
         onOpenChange(false);
     };
-    const Field = (k) => (
-        <PwField k={k} show={show[k]} pw={pw[k]}
-                 onChange={(v) => setPw({ ...pw, [k]: v })}
-                 onToggle={() => setShow({ ...show, [k]: !show[k] })} />
+    const rowFor = (k, label) => (
+        <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[180px_1fr]">
+            <Label>{label} <span className="text-destructive">*</span></Label>
+            <PwField k={k} show={show[k]} pw={pw[k]}
+                     onChange={(v) => setPw({ ...pw, [k]: v })}
+                     onToggle={() => setShow({ ...show, [k]: !show[k] })} />
+        </div>
     );
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,15 +130,9 @@ export function ModifyPasswordDialog({ open, onOpenChange }) {
                     </DialogHeader>
                 </div>
                 <div className="space-y-4 px-6 py-5">
-                    <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[180px_1fr]">
-                        <Label>Old Password <span className="text-destructive">*</span></Label>{Field("old")}
-                    </div>
-                    <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[180px_1fr]">
-                        <Label>New Password <span className="text-destructive">*</span></Label>{Field("next")}
-                    </div>
-                    <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[180px_1fr]">
-                        <Label>Confirm Password <span className="text-destructive">*</span></Label>{Field("confirm")}
-                    </div>
+                    {rowFor("old", "Old Password")}
+                    {rowFor("next", "New Password")}
+                    {rowFor("confirm", "Confirm Password")}
                     <div className="text-xs text-muted-foreground">
                         6-20 digits, with at least 3 types of uppercase and lowercase letters/numbers/special
                         characters. Special characters are not allowed to be entered: /\ &quot;&apos;{"{}"} [],:;

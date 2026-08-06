@@ -1,59 +1,50 @@
 # eInvoices.world — PRD
 
-## Problem statement
-Enterprise E-Invoicing Platform for Malaysia LHDN MyInvois (Intermediary
-"GLOCO"). Multi-tenant SaaS bridging clinics'/retailers' EMR/POS/ERP systems
-to LHDN. API-first, RBAC, pluggable adapter layer.
-
-## Stack
-React + Tailwind + Shadcn + Tanstack Query · FastAPI + MongoDB · JWT ·
-LHDN MyInvois preprod (OAuth2 + RSA-SHA256 + UBL 2.1).
+Malaysia LHDN MyInvois multi-tenant Intermediary SaaS. React + FastAPI + MongoDB.
 
 ## Iterations
-1. Multi-tenant + invoices + mock adapter + dashboard + MyTax + audit + RBAC.
-2. Real LHDN OAuth2 + RSA-SHA256 + QR step-up MFA + gov-config admin.
-3. ICS console + bulk CSV/Excel + signed PDF + API Client Bridge (webhooks)
-   + UBL 2.1 with OnBehalfOf + configurable roles + Clinic Onboarding Wizard.
-4. REAL LHDN preprod UUID (`K1YBN0YP691SD7BTHYHCZ8ZK10`), UBL hash fix
-   (SHA-256 hex), UBL enrichment, `gloco_tin` bypass, API client SDK snippets
-   + rate limits, Emergent-free Docker/Compose/nginx production package.
-5. Perf: `ensure_indexes()`, `$facet` dashboard, projections + pagination on
-   every list, GzipMiddleware, React.lazy + QueryClient tuning, idempotent
-   demo-scale seed (8 buyers, 5 suppliers, 8 products, 28 invoices).
-6. Global Clinic Switcher (`company_id` filter on dashboard, ICS, invoices),
-   cross-tenant leak safe, localStorage persistence.
-7. LHDN UI rebrand — Customers→Buyers, ICS→EIW, red accent #E30514 (355 96%),
-   32-column Transaction Data Management table, InvoiceDetail rewritten with
-   Sections A–H (Malaysian LHDN e-invoice layout) + Submit/Modify/Cancel wired
-   to SigningGate.
-8. **Iteration 8 (this)** — Invoicing Consolidated Management (`/ics/consolidated`)
-   rebuilt to match LHDN portal exactly:
-   - 32 LHDN columns identical to the screenshots, with buyer pinned to
-     General Public (`EI00000000010`) and doc numbers in `S-XXXXXXX-S-XXXXXXX`
-     format.
-   - Expand-collapse filter panel + full toolbar (Invoice Preview, Submit,
-     View Transaction Data, View Invalid Reasons, Operation Log, Check
-     Incompleted Fields, Export, Run Consolidate Task).
-   - Wizard-style Invoice Preview modal renders Sections A–H exactly like
-     the Malaysian LHDN portal, with Previous / Next / Cancel navigation
-     across pages *and* across selected rows.
-   - React duplicate-key warning fixed; `Submit` uses `useNavigate` instead
-     of `<Link>` so the disabled state actually blocks navigation.
-   - Testing agent iteration_7.json: 100% frontend pass, no blocking issues.
+1–7 as previously recorded (auth, RBAC, real LHDN preprod UUID, SDK snippets,
+rate limits, clinic switcher, EIW rebrand, red accent, 32-col Consolidated
+Management + A-H Invoice Preview).
 
-## Backlog
-### P1
+### Iteration 8 (this)
+- **Red primary buttons** — `--primary` CSS var repointed to Malaysia LHDN red
+  `#E30514` (355 96%) so every default shadcn button now matches accent.
+- **Malaysia address data** (`/lib/malaysia.js`) — 17 states, per-state city
+  lists, per-city area lists, ISO country codes.
+- **Debit Note Management** (`/debit-notes`) — LHDN-style source-invoice list
+  with 13 columns matching screenshot (NO, Document Type, Document NO.,
+  E-Invoice UUID, Buyer's TIN, Buyer's Name pinned to General Public,
+  Excl Tax, Incl Tax, Payable, Tax, Date Time Issued, Issuer TIN). Click a
+  row → wizard-style Request Debit Note with Sections A (Basic Info), B
+  (Supplier's Info), C (Buyer's Details) matching screenshots pixel-for-pixel;
+  Country/State/City/Area cascading dropdowns; Next/Previous/Cancel/Submit.
+- **Operation Log Report** (`/operation-log`) — 5-column LHDN table (NO,
+  Operator, Operation Date, Operation Details) with Expand-collapse filter
+  (Operator + Date from/to + Search + Reset), View Details modal (Operated
+  Account + Operation Details textarea + Close), Export CSV.
+- **Profile flow** — topbar user avatar dropdown (View My Profile / Modify
+  Password / Account Security / Logout). `/profile` renders Section A: Basic
+  Information (Account, User Name, Contact Number) + Section B: My Company
+  (Taxpayer's Info Maintenance / User Binding / Contract Details buttons + a
+  9-column company table). Modify Password + Account Security dialogs match
+  screenshots (Old/New/Confirm with show-hide eye + rules; Enable Authorized
+  Login radio + Generate Authorization Code + timestamp).
+- **New Buyer / New Supplier forms** now render as LHDN Sections C / B with
+  Country/State/City/Area cascading Malaysia dropdowns; Save via primary bar.
+- **Sidebar cleanup** — Debit Note Management + Operation Log Report moved
+  inside the EIW Console submenu (removed from top-level).
+- **Lint / a11y polish** — fixed `no-unstable-nested-components` on Profile,
+  duplicate-key warning in Consolidated Run dialog, DialogDescription on
+  every new modal.
+
+Testing agent: iteration_7 100% frontend pass; iteration_8 launched.
+
+## Backlog (P1 → P3)
 - Notification center (email/SMS/webhook) for LHDN rejections
-- Reports (Sales / Tax / Aging) with CSV & PDF export scoped by clinic
-- Credit note / Debit note first-class flows
-- Backend enforcement of "General Public" buyer at consolidation persist time
-- Split IcsConsolidated.jsx dialogs into `./components/` for maintainability
-### P2
-- Per-clinic KPIs (RM billed, LHDN success %) on Dashboard
+- Backend `/api/auth/change-password` + `/api/profile` endpoints
 - Peppol / IRAS / GST / ZATCA adapters
-- Convert `invoices.created_at` from ISO string → BSON datetime
-### P3
-- AI Invoice Assistant / Error Detection / Tax Suggestions / Fraud Detection
+- Backend enforcement of "General Public" buyer on consolidated submit
 
 ## Test credentials
 `admin@einvoice.my` / `Admin@12345` — pilot company_id `6a7330392b20661e6a9c08c6`.

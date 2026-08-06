@@ -81,7 +81,7 @@ export default function Customers() {
                                 </DialogHeader>
                             </div>
                             <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
-                                <SectionBar title="Section C: Buyer&apos;s Details" />
+                                <SectionBar title={"Section C: Buyer\u2019s Details"} />
                                 <Card>
                                     <TF l="ID Type">
                                         <SelectField value={form.id_type} onValueChange={(v) => set("id_type", v)}
@@ -215,8 +215,9 @@ function SelectField({ value, onValueChange, options, testid }) {
 }
 function SectionBar({ title }) {
     return (
-        <div className="rounded-t-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
-             dangerouslySetInnerHTML={{ __html: title }} />
+        <div className="rounded-t-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">
+            {title}
+        </div>
     );
 }
 function Card({ children }) {
