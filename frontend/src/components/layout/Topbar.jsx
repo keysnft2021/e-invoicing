@@ -53,7 +53,7 @@ export default function Topbar({ onOpenCommand }) {
                             {isAll ? "All clinics" : (current?.name || "No company")}
                         </span>
                         {isAll && (
-                            <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent">
+                            <span className="ml-2 inline-flex items-center rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] leading-none text-accent">
                                 {companies.length}
                             </span>
                         )}
