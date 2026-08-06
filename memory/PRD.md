@@ -1,39 +1,42 @@
 # eInvoices.world — PRD
 
 Malaysia LHDN MyInvois multi-tenant Intermediary SaaS. React + FastAPI + MongoDB.
-Purely clinic/medical vertical (as of iteration 9).
+Purely clinic/medical vertical.
 
-## Iterations
-1–8 as previously recorded (auth, RBAC, real LHDN preprod UUID, SDK snippets,
-rate limits, clinic switcher, EIW rebrand, red accent, 32-col Consolidated
-Management + A-H Invoice Preview, Debit Notes, Operation Log Report, Profile
-flow, Section B/C forms with Malaysia dropdowns).
+## Iterations 1–9
+See git history. Highlights: real LHDN preprod UUID, SDK snippets, rate
+limits, clinic switcher, red LHDN accent #E30514, EIW rebrand, 32-column
+Consolidated Management + A–H Invoice Preview, Debit Note Management,
+Operation Log Report, Section B/C/D forms with Malaysia dropdowns, clinic-
+only seed (8 buyers / 5 suppliers / 8 products).
 
-### Iteration 9 (this)
-- **Clinic-only vertical** — seed rewritten to purely medical: 8 buyers
-  (MediCare, Wellness Family, Sunway Medical, KPJ Damansara, Pantai Hospital
-  KL, Gleneagles, Columbia Asia, Retail Buyer), 5 pharma suppliers
-  (Pharmaniaga, Zuellig, DKSH, Kotra, Hovid), 8 medical products (consultation,
-  vaccination, FBC test, dental, botox, X-ray, paracetamol, physio).
-  Startup cleanup deletes older non-medical rows (SteelWorks, TransLogistics,
-  Tenaga, Office Supplies, Cloud Hosting, Laptop, Cement, etc.) — verified via
-  `/api/products` and `/api/customers` after restart.
-- **New Product form** now renders LHDN Section D: Line Item Details —
-  Classification (MSIC-mapped medical dropdown), Item Name, SKU, Measurement
-  (each/SES/DOSE/TEST/STRIP/UNIT/MO/HR/BOTTLE), Quantity, Unit Price,
-  Total Before Discount (auto), Discount Rate, Total Excluding Tax (auto),
-  Tax Rate, Tax Amount (auto), Subtotal (auto), Fee/Charge Rate, Fee/Charge
-  Amount, Product Tariff Code, Country of Origin (Malaysia default).
-  Live calculations verified against the LHDN screenshot (qty 15 × price 0.50
-  → total before/excl 7.50).
+## Iteration 10 (this)
+- **Invoice Management** on `/ics/fiscal-document` rewritten to match LHDN
+  portal screenshot:
+  - 12 columns: checkbox, NO., Document Type, Document NO. (S-…-S-…),
+    Submission UID, E-Invoice UUID, Description of Product or Service,
+    Supplier's TIN, Supplier's Name (defaults to DFACE HEALTHCARE SDN BHD /
+    C24700902040), Buyer's TIN (EI00000000010), Buyer's Name (General
+    Public), Total Net Amount.
+  - Toolbar: Cancel, View, View Invoice PDF, Share Invoice PDF, View Invalid
+    Reasons, Operation Log, Export, Export QR Code List (each requires
+    exactly one selected row; toast error otherwise).
+  - Expand-collapse filter panel: Document NO., Document Type, Submission
+    UID, E-Invoice UUID, Supplier's TIN, Buyer's TIN + Search / Reset.
+  - Footer Total row aggregates Total Net Amount.
+  - Export produces LHDN-aligned CSV; Export QR Code List produces a
+    QR/uuid list CSV + confirmation modal.
 
-Testing agent iteration_9 launched.
+Testing agent iteration_10 launched.
 
 ## Backlog (P1 → P3)
-- Reusable MalaysiaAddressBlock component (DRY across Customers/Suppliers/DebitNotes)
-- Backend `/api/auth/change-password` + `/api/profile` endpoints
-- Notification center (email/SMS/webhook) for LHDN rejections
+- Reusable MalaysiaAddressBlock (DRY across Customers/Suppliers/DebitNotes)
+- Backend `/api/auth/change-password` + `/api/profile`
+- Extend `/api/products` schema with `msic_class`, `discount_rate`,
+  `country_of_origin`, `tariff_code`
+- Notification center for LHDN rejections
 - Peppol / IRAS / GST / ZATCA adapters
+- Recharts minHeight fix on Dashboard trend chart
 
 ## Test credentials
 `admin@einvoice.my` / `Admin@12345` — pilot company_id `6a7330392b20661e6a9c08c6`.
