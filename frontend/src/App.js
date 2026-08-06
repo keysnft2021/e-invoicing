@@ -8,6 +8,9 @@ import Login from "@/pages/Login";
 import "@/App.css";
 
 // Lazy-load every authenticated page — smaller initial bundle, faster login.
+const DebitNotes         = lazy(() => import("@/pages/DebitNotes"));
+const OperationLogReport = lazy(() => import("@/pages/OperationLogReport"));
+const Profile            = lazy(() => import("@/pages/Profile"));
 const Dashboard        = lazy(() => import("@/pages/Dashboard"));
 const Invoices         = lazy(() => import("@/pages/Invoices"));
 const NewInvoice       = lazy(() => import("@/pages/NewInvoice"));
@@ -73,6 +76,9 @@ export default function App() {
                                     <Route path="basic-info" element={<IcsBasicInfo />} />
                                 </Route>
                                 <Route path="/audit" element={<AuditLog />} />
+                                <Route path="/debit-notes" element={<DebitNotes />} />
+                                <Route path="/operation-log" element={<OperationLogReport />} />
+                                <Route path="/profile" element={<Profile />} />
                                 <Route path="/settings" element={<Settings />} />
                             </Route>
                             <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend polish tickets verified end-to-end: (1) Sidebar reorg — top-level nav no longer shows Debit Note Management or Operation Log Report; both are now children of 'EIW Console' in the exact required order (Dashboard, My Transaction, Consolidated Task, Debit Note Management, My Fiscal Document, Reports, Operation Log Report, Basic Info). Routes /debit-notes and /operation-log still work when clicked from the submenu. (2) New Buyer modal (data-testid=new-buyer-modal) opens from /customers with red Section C banner, all required fields, and cascading Country/State/City/Area dropdowns. (3) New Supplier modal (data-testid=new-supplier-modal) opens from /suppliers with red Section B banner, MSIC default '(86201)General medical services', textarea, and the same cascading address block. Cascading verified: Selangor->[Shah Alam,Petaling Jaya,Subang Jaya,Klang,...], Perak->Teluk Intan->[Bandar Baru,Bandar Utama,Air Kuning], KL->[Bukit Bintang,KLCC,...]. Save flow works: filling Name=TEST_Buyer_MY, TIN=C11111100000, State=Selangor and clicking Save triggered toast 'Buyer created', modal closed, and the new row appeared in the buyers table (spot-check confirms backend POST /api/customers still accepts the flattened body).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Customers.jsx SectionBar uses dangerouslySetInnerHTML for a static apostrophe entity — safe today but unnecessary; prefer plain text like Suppliers.jsx does.",
+    "AddressBlock is duplicated verbatim between Customers.jsx and Suppliers.jsx (DRY violation ~40 lines). Consider extracting into /components/common/MalaysiaAddressBlock.jsx.",
+    "Recurring console warning 'The width(-1) and height(-1) of chart should be greater than 0' from Recharts ResponsiveContainer on dashboard — not blocking, but should be fixed with an explicit minHeight."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created one buyer 'TEST_Buyer_MY' with TIN C11111100000 via UI (persisted).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sidebar EIW Console submenu testids: ics-nav-dashboard, ics-nav-transaction, ics-nav-consolidated, ics-nav-debit-notes, ics-nav-fiscal, ics-nav-reports, ics-nav-operation-log, ics-nav-basic. New Buyer modal testids: new-customer-btn, new-buyer-modal, cust-tin, cust-name, cust-id-value, cust-state, cust-city, cust-area, cust-save-btn. New Supplier modal testids: new-supplier-btn, new-supplier-modal, sup-tin, sup-name, sup-state, sup-city, sup-area, sup-save-btn. Address block is duplicated across both pages — refactor candidate."
+}
