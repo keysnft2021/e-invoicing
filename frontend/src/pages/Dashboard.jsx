@@ -111,8 +111,8 @@ export default function Dashboard() {
                         </div>
                         <PieIcon className="h-4 w-4 text-muted-foreground" />
                     </div>
-                    <div className="h-56">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-56 min-h-[224px]" data-testid="dashboard-trend">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={224}>
                             <AreaChart data={s.trend || []}>
                                 <defs>
                                     <linearGradient id="fillArea" x1="0" y1="0" x2="0" y2="1">

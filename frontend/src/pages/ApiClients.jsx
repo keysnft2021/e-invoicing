@@ -12,7 +12,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -308,6 +308,9 @@ export default function ApiClients() {
                 <DialogContent className="max-w-3xl" data-testid="snippets-modal">
                     <DialogHeader>
                         <DialogTitle>SDK snippets · {snippets?.name}</DialogTitle>
+                        <DialogDescription>
+                            Copy-paste ready code samples to call the bridge from any EMR/POS/ERP.
+                        </DialogDescription>
                     </DialogHeader>
                     {snippets && (
                         <div className="space-y-3">
@@ -363,6 +366,9 @@ export default function ApiClients() {
                 <DialogContent data-testid="rate-modal">
                     <DialogHeader>
                         <DialogTitle>Rate limit · {rateFor?.name}</DialogTitle>
+                        <DialogDescription>
+                            Cap invoices this client can push per rolling hour.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
                         <Label>Invoices per rolling hour</Label>

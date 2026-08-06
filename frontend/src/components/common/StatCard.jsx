@@ -9,9 +9,11 @@ export default function StatCard({
     trend,
     className,
     accent,
+    testid,
 }) {
     return (
         <div
+            data-testid={testid}
             className={cn(
                 "group relative rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/20",
                 className,
@@ -28,7 +30,12 @@ export default function StatCard({
                 )}
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-                <div className="font-display text-3xl font-semibold tracking-tight">{value}</div>
+                <div
+                    data-testid={testid ? `${testid}-value` : undefined}
+                    className="font-display text-3xl font-semibold tracking-tight"
+                >
+                    {value}
+                </div>
                 {trend != null && (
                     <span className="inline-flex items-center gap-0.5 text-xs text-success">
                         <ArrowUpRight className="h-3 w-3" />
