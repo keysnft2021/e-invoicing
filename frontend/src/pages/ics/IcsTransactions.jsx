@@ -434,10 +434,10 @@ export default function IcsTransactions() {
                                 <Th>Document NO.</Th>
                                 <Th>Business System</Th>
                                 <Th>Store Code/Location</Th>
-                                <Th>Supplier's TIN</Th>
-                                <Th>Supplier's Name</Th>
-                                <Th>Buyer's TIN</Th>
-                                <Th>Buyer's Name</Th>
+                                <Th>Supplier&apos;s TIN</Th>
+                                <Th>Supplier&apos;s Name</Th>
+                                <Th>Buyer&apos;s TIN</Th>
+                                <Th>Buyer&apos;s Name</Th>
                                 <Th className="text-right">Total Net Amount</Th>
                                 <Th className="text-right">Total Discount Value</Th>
                                 <Th className="text-right">Total Fee/Charge</Th>
