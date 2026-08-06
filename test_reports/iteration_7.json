@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only UI testing of /ics/consolidated (Invoicing Consolidated Management). Verified 32-col LHDN table, Expand filter panel, complete toolbar, buyer pinning to General Public / EI00000000010, currency label '(MYR)Malaysian Ringgit', S-XXXXXXX-S-XXXXXXX doc number format, footer totals row, red brand accent (CSS var --accent = '355 96% 55%'). Invoice Preview modal opens with breadcrumb 'Invoicing Consolidated Management / Invoice Preview', renders Sections A-B-C on page 1 with all required fields (EI00000000010, General Public, (86201)General medical services, Teluk Intan, Jalan Raja, MALAYSIA); Next advances to page 2 rendering Sections D-E-F-G-H including 'Consolidated e-Invoice' classification, 'No Data' for Section G, and Section H summary chips. Previous returns to page 1. Cancel closes the modal. Regression: View Invalid Reasons, Operation Log, Check Incompleted Fields, Run Consolidate Task (TIN dropdown loads via /api/ics/tin-list), and Export (CSV download 'consolidated-*.csv') all function.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MINOR: React console warning 'Encountered two children with the same key C99999999999' when opening the Run Consolidate Task dialog — /api/ics/tin-list returns duplicate TIN entries. De-duplicate on server or use a composite key (tin+label) in the SelectItem key in IcsConsolidated.jsx RunDialog."
+  ],
+  "critical_code_review_comments": [
+    "IcsConsolidated.jsx is ~980 LOC and mixes 6 dialogs + table + filter in one file — consider splitting PreviewDialog, RunDialog, ReasonsDialog, OpLogDialog, IncompleteDialog into ./components/ subfiles for maintainability.",
+    "consolidatedDocNo() uses parseInt(...,'16') of last-6 hex chars — collision risk across large datasets is acceptable for display but numbers are not truly unique; if used as identifier consider suffixing with index.",
+    "Toolbar 'Submit' button is a Link that always navigates even when disabled=true (Button asChild + Link is not blocked by disabled). Minor UX issue.",
+    "Client-side pinning of Buyer TIN/Name is fine for UI but Export CSV also hardcodes it — ensure backend consolidation actually enforces General Public buyer at persistence time."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing 70 rows from /api/ics/transactions",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 7 spec checkpoints pass. Only outstanding item is duplicate-key React warning in Run Consolidate dialog's Issuer TIN Select — cosmetic. Modal wizard tested with idx=0 (first row) so page-1 Previous goes to page-0 state (disabled). To test cross-row navigation, select a row at idx > 0."
+}
