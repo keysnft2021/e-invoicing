@@ -37,7 +37,8 @@ export default function Invoices() {
             const url = status === "all" ? "/invoices" : `/invoices?status=${status}`;
             return (await api.get(url)).data;
         },
-        refetchInterval: 5000,
+        refetchInterval: 30_000,
+        staleTime: 15_000,
     });
 
     const filtered = useMemo(() => {

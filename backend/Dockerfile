@@ -32,4 +32,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=5s --retries=5 --start-period=15s \
     CMD curl -fsS http://localhost:8001/api/health || exit 1
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]
+# Use a shell so ${UVICORN_WORKERS} is substituted at runtime.
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port 8001 --workers ${UVICORN_WORKERS:-2} --no-access-log"]

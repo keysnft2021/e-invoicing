@@ -1,33 +1,44 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import AppShell from "@/components/layout/AppShell";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-import Invoices from "@/pages/Invoices";
-import NewInvoice from "@/pages/NewInvoice";
-import InvoiceDetail from "@/pages/InvoiceDetail";
-import Customers from "@/pages/Customers";
-import Suppliers from "@/pages/Suppliers";
-import Products from "@/pages/Products";
-import Companies from "@/pages/Companies";
-import Users from "@/pages/Users";
-import RolesPage from "@/pages/RolesPage";
-import MyTax from "@/pages/MyTax";
-import AuditLog from "@/pages/AuditLog";
-import Settings from "@/pages/Settings";
-import GovConfig from "@/pages/GovConfig";
-import SignApprove from "@/pages/SignApprove";
-import ApiClients from "@/pages/ApiClients";
-import IcsLayout from "@/pages/ics/IcsLayout";
-import IcsDashboard from "@/pages/ics/IcsDashboard";
-import IcsTransactions from "@/pages/ics/IcsTransactions";
-import IcsConsolidated from "@/pages/ics/IcsConsolidated";
-import IcsFiscalDocument from "@/pages/ics/IcsFiscalDocument";
-import IcsReports from "@/pages/ics/IcsReports";
-import IcsBasicInfo from "@/pages/ics/IcsBasicInfo";
 import "@/App.css";
+
+// Lazy-load every authenticated page — smaller initial bundle, faster login.
+const Dashboard        = lazy(() => import("@/pages/Dashboard"));
+const Invoices         = lazy(() => import("@/pages/Invoices"));
+const NewInvoice       = lazy(() => import("@/pages/NewInvoice"));
+const InvoiceDetail    = lazy(() => import("@/pages/InvoiceDetail"));
+const Customers        = lazy(() => import("@/pages/Customers"));
+const Suppliers        = lazy(() => import("@/pages/Suppliers"));
+const Products         = lazy(() => import("@/pages/Products"));
+const Companies        = lazy(() => import("@/pages/Companies"));
+const Users            = lazy(() => import("@/pages/Users"));
+const RolesPage        = lazy(() => import("@/pages/RolesPage"));
+const MyTax            = lazy(() => import("@/pages/MyTax"));
+const AuditLog         = lazy(() => import("@/pages/AuditLog"));
+const Settings         = lazy(() => import("@/pages/Settings"));
+const GovConfig        = lazy(() => import("@/pages/GovConfig"));
+const SignApprove      = lazy(() => import("@/pages/SignApprove"));
+const ApiClients       = lazy(() => import("@/pages/ApiClients"));
+const IcsLayout        = lazy(() => import("@/pages/ics/IcsLayout"));
+const IcsDashboard     = lazy(() => import("@/pages/ics/IcsDashboard"));
+const IcsTransactions  = lazy(() => import("@/pages/ics/IcsTransactions"));
+const IcsConsolidated  = lazy(() => import("@/pages/ics/IcsConsolidated"));
+const IcsFiscalDocument = lazy(() => import("@/pages/ics/IcsFiscalDocument"));
+const IcsReports       = lazy(() => import("@/pages/ics/IcsReports"));
+const IcsBasicInfo     = lazy(() => import("@/pages/ics/IcsBasicInfo"));
+
+function PageFallback() {
+    return (
+        <div className="flex h-64 items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        </div>
+    );
+}
 
 export default function App() {
     return (
@@ -35,36 +46,38 @@ export default function App() {
             <AuthProvider>
                 <BrowserRouter>
                     <Toaster richColors position="top-right" />
-                    <Routes>
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/sign/:sessionId" element={<SignApprove />} />
-                        <Route element={<AppShell />}>
-                            <Route path="/" element={<Dashboard />} />
-                            <Route path="/invoices" element={<Invoices />} />
-                            <Route path="/invoices/new" element={<NewInvoice />} />
-                            <Route path="/invoices/:id" element={<InvoiceDetail />} />
-                            <Route path="/customers" element={<Customers />} />
-                            <Route path="/suppliers" element={<Suppliers />} />
-                            <Route path="/products" element={<Products />} />
-                            <Route path="/companies" element={<Companies />} />
-                            <Route path="/users" element={<Users />} />
-                            <Route path="/roles" element={<RolesPage />} />
-                            <Route path="/mytax" element={<MyTax />} />
-                            <Route path="/gov-config" element={<GovConfig />} />
-                            <Route path="/api-clients" element={<ApiClients />} />
-                            <Route path="/ics" element={<IcsLayout />}>
-                                <Route index element={<IcsDashboard />} />
-                                <Route path="my-transaction" element={<IcsTransactions />} />
-                                <Route path="consolidated" element={<IcsConsolidated />} />
-                                <Route path="fiscal-document" element={<IcsFiscalDocument />} />
-                                <Route path="reports" element={<IcsReports />} />
-                                <Route path="basic-info" element={<IcsBasicInfo />} />
+                    <Suspense fallback={<PageFallback />}>
+                        <Routes>
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/sign/:sessionId" element={<SignApprove />} />
+                            <Route element={<AppShell />}>
+                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/invoices" element={<Invoices />} />
+                                <Route path="/invoices/new" element={<NewInvoice />} />
+                                <Route path="/invoices/:id" element={<InvoiceDetail />} />
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/suppliers" element={<Suppliers />} />
+                                <Route path="/products" element={<Products />} />
+                                <Route path="/companies" element={<Companies />} />
+                                <Route path="/users" element={<Users />} />
+                                <Route path="/roles" element={<RolesPage />} />
+                                <Route path="/mytax" element={<MyTax />} />
+                                <Route path="/gov-config" element={<GovConfig />} />
+                                <Route path="/api-clients" element={<ApiClients />} />
+                                <Route path="/ics" element={<IcsLayout />}>
+                                    <Route index element={<IcsDashboard />} />
+                                    <Route path="my-transaction" element={<IcsTransactions />} />
+                                    <Route path="consolidated" element={<IcsConsolidated />} />
+                                    <Route path="fiscal-document" element={<IcsFiscalDocument />} />
+                                    <Route path="reports" element={<IcsReports />} />
+                                    <Route path="basic-info" element={<IcsBasicInfo />} />
+                                </Route>
+                                <Route path="/audit" element={<AuditLog />} />
+                                <Route path="/settings" element={<Settings />} />
                             </Route>
-                            <Route path="/audit" element={<AuditLog />} />
-                            <Route path="/settings" element={<Settings />} />
-                        </Route>
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </Suspense>
                 </BrowserRouter>
             </AuthProvider>
         </ThemeProvider>

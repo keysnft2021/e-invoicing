@@ -1,11 +1,16 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// When REACT_APP_BACKEND_URL is empty or "/", hit the same origin (production
+// nginx reverse-proxies /api to the backend). Otherwise use the absolute URL.
+const rawBackend = (process.env.REACT_APP_BACKEND_URL || "").trim();
+const BACKEND_URL = rawBackend === "/" ? "" : rawBackend.replace(/\/+$/, "");
 export const API_BASE = `${BACKEND_URL}/api`;
 
 const api = axios.create({
     baseURL: API_BASE,
     withCredentials: true,
+    // Fail fast so a stalled network doesn't freeze the SPA
+    timeout: 30_000,
 });
 
 // Attach bearer token as fallback (in case cookies are blocked cross-site)
@@ -17,6 +22,21 @@ api.interceptors.request.use((config) => {
     }
     return config;
 });
+
+// Auto-logout on 401 so the user sees the login screen instead of infinite spinners
+api.interceptors.response.use(
+    (r) => r,
+    (err) => {
+        if (err?.response?.status === 401) {
+            localStorage.removeItem("access_token");
+            if (!window.location.pathname.startsWith("/login") &&
+                !window.location.pathname.startsWith("/sign/")) {
+                window.location.assign("/login");
+            }
+        }
+        return Promise.reject(err);
+    },
+);
 
 export function formatApiError(err) {
     const detail = err?.response?.data?.detail;

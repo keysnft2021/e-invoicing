@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 4 (perf + idempotent seed + indexes + docker/nginx polish) verified end-to-end. Backend: 13/13 pytest cases pass in /app/backend/tests/iteration4_test.py. Measured latencies over the public ingress URL: dashboard/stats=4ms (spec 400ms), invoices list=8ms with 70 rows (spec 500ms), customers=2ms, suppliers=2ms, products=2ms, audit=3ms — all one to two orders of magnitude under budget. The dashboard/stats $facet response has all 8 required keys (today_count, total_invoices=70, total_value, by_status={validated:14, rejected:13, draft:38, cancelled:2, submitting:0, ...}, success_rate, tax_collected=721.26, trend[14 items], adapters). GET /api/invoices returns a flat array with the projected fields (invoice_number, invoice_type, invoice_date, currency, customer_snapshot, status, total, government.uuid); ?limit + ?skip work; page1(skip=0) and page2(skip=100) IDs are disjoint; limit=9999 does not 500. GET /api/customers|/suppliers|/products all accept ?q=&limit=&skip= and return case-insensitive matches on name/sku. GET /api/audit accepts ?action=&limit=&skip= filters. Seed: admin's tenant Acme has 15 customers (spec 8), 5 suppliers, 9 products, 70 invoices with mix {validated, rejected, draft, cancelled} (spec ≥28). Re-running seed() against Motor produced identical counts (idempotent — 0 dupes). Indexes verified via pymongo index_information() on invoices((tenant_id,created_at DESC)), invoices((tenant_id,status,created_at DESC)), customers((tenant_id,name)), audit_logs((tenant_id,created_at DESC)), api_clients(client_id unique) — all present. Regression: /api/auth/me, /api/api-clients list, /api/ics/summary all 200. Frontend: /login loads (screenshot), Sign in with admin@einvoice.my → dashboard renders with populated numbers (VALIDATED 14, REJECTED 13, DRAFT 38, TOTAL RM 37,028.56, Tax RM 721.26) and a 14-day trend chart peaking 07-27. Sidebar lazy-nav to /customers, /suppliers, /products, /api-clients all work. /api-clients page shows all 18+ TEST_ client cards from iteration 3. SDK snippets modal opens, shows all 4 tabs (curl/node/python/health) with rate limit '88 req/hour' displayed and a valid curl snippet including https://lhdn-connect.preview.emergentagent.com/api/external/invoices, X-Client-Id and Authorization: Bearer <CLIENT_SECRET> (verified visually in screenshot). Test iteration 3 report was reviewed for context.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/dashboard/stats", "issue": "dashboard $facet 'today' bucket filters by created_at >= today (ISO date string) — works because created_at is stored as ISO string starting with YYYY-MM-DD, but is fragile: any insertion path that stores created_at as datetime (not string) will be excluded silently. Consider normalising created_at to a real datetime everywhere and switching the aggregation to real date comparisons."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard chart", "issues": ["Recharts 'width(-1) height(-1)' warning still logged on first paint before ResponsiveContainer has a size — cosmetic, chart renders correctly a moment later. Carried over from iter-1/2/3, still unfixed."]},
+      {"screen": "SDK snippets & Rate-limit modals", "issues": ["shadcn DialogContent lacks aria-describedby — a11y warning printed to console on every open. Add <DialogDescription> or aria-describedby={undefined} suppression."]},
+      {"screen": "Dashboard KPI cards", "issues": ["Cards have no data-testids (stat-validated / stat-rejected / stat-draft / dashboard-trend). Numbers render correctly but automated tests must grep the DOM by text, which is brittle. Add data-testids to the four KPI cards and to the trend/pie containers."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/iteration4_test.py",
+    "/app/test_reports/pytest/iteration4.xml"
+  ],
+  "action_items": [
+    "Add data-testids to Dashboard KPI cards (stat-validated, stat-rejected, stat-draft, stat-total-value) and trend/pie containers for stable UI tests.",
+    "Silence Recharts width/height warning by giving ResponsiveContainer an explicit minHeight or by lazy-rendering after mount.",
+    "Add <DialogDescription> to SDK-snippets and rate-limit dialogs to remove the aria-describedby warning.",
+    "Normalise invoices.created_at to a real BSON datetime (not ISO string) so the today/trend $facet buckets are index-friendly and comparison-safe."
+  ],
+  "critical_code_review_comments": [
+    "dashboard.py $facet — 'today' uses `{$gte: today_iso_date}` string comparison. Works only because created_at is stored as ISO string with the same prefix format everywhere. Migrate created_at to datetime and use real date $gte with $dateTrunc for correctness and index use.",
+    "seed.py::seed() — invoice re-seed guard is `count == 0`. If an admin manually deletes some but not all seed invoices, the seed will not re-fill them. If that's the intended contract, note it in a docstring; otherwise, guard by invoice_number pattern like /^INV-\\d{6}-100\\d{2}$/.",
+    "seed.py — invoice created_at uses `.isoformat()` (string). Consistent with the rest of the code but couples the dashboard aggregation to string sort order.",
+    "deps.py::ensure_indexes — good, comprehensive. Consider marking api_clients.client_id index as sparse if any legacy docs may lack the field, and adding TTL on signing_sessions.expires_at (expireAfterSeconds:0) to actually auto-purge expired sessions.",
+    "routes/invoices.py list_invoices — projection is a good win. Consider also excluding heavy `lines` and `timeline` arrays from the list projection (they're not shown in the list view)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/iteration4_test.py (NEW: 13 tests, all pass)"
+  ],
+  "success_rate": {"backend": "100% (13/13 iteration-4 pytest)", "frontend": "100% of tested flows (login → dashboard w/ populated KPIs + trend chart → sidebar nav customers/suppliers/products/api-clients → SDK snippets modal with 4 tabs)"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (working)",
+  "seed_data_creation": "None new — iteration 3 test data (TEST_ prefixed api_clients) still present and visible in /api-clients. Iteration 4 tests are read-only against the seeded data + call the seed function in-place to verify idempotency (no writes).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `python -m pytest backend/tests/iteration4_test.py -o addopts= -v` (repo pytest.ini enables xdist; -o disables it). Measured backend latencies on this preview droplet (via ingress): dashboard/stats 4ms, invoices 8ms/70rows, masters 2ms, audit 3ms — well under the 400/500/300/300ms budgets. Seed produced 15/5/9/70 (customers/suppliers/products/invoices) for tenant 'acme'. If invoice count drops below the seed's 28-row guard, note that the seed only reseeds when the tenant has ZERO invoices (count_documents == 0 guard in seed.py:271). Frontend dashboard uses no data-testids on KPI cards yet — assert numbers by text (page.get_by_text('VALIDATED').locator('..')).",
+  "rca_of_issue": "N/A — no bugs found in iteration-4 scope. All perf targets met with generous margin; seed and index requirements satisfied."
+}

@@ -74,12 +74,14 @@ async def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     db = get_db()
-    user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+    user = await db.users.find_one(
+        {"_id": ObjectId(payload["sub"])},
+        {"email": 1, "name": 1, "role": 1, "tenant_id": 1, "status": 1},
+    )
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     user["id"] = str(user["_id"])
     user.pop("_id", None)
-    user.pop("password_hash", None)
     return user
 
 

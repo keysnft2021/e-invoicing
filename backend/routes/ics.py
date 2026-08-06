@@ -148,7 +148,7 @@ async def list_transactions(
         if amount_to is not None: rng["$lte"] = amount_to
         q["total"] = rng
 
-    rows = [_s(d) async for d in db.invoices.find(q).sort("created_at", -1).limit(limit)]
+    rows = [_s(d) async for d in db.invoices.find(q).sort("created_at", -1).skip(0).limit(min(500, max(1, limit)))]
     total = sum(r.get("total", 0) for r in rows)
     return {"rows": rows, "total": total, "count": len(rows)}
 

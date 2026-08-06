@@ -1,3 +1,4 @@
+"""Dashboard aggregation — single-round-trip $facet for enterprise-grade speed."""
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
 from deps import get_db, require_tenant
@@ -8,41 +9,58 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/stats")
 async def stats(ctx=Depends(require_tenant)):
+    """One aggregation pipeline returns status breakdown, today's count, and
+    14-day trend — three previous queries collapsed to one."""
     db = get_db()
     tenant_id = ctx["tenant_id"]
-    today = datetime.now(timezone.utc).date().isoformat()
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    window_start = (now - timedelta(days=13)).date().isoformat()
 
-    pipeline_status = [
+    pipeline = [
         {"$match": {"tenant_id": tenant_id}},
-        {"$group": {"_id": "$status", "count": {"$sum": 1}, "sum": {"$sum": "$total"}}},
+        {"$facet": {
+            "by_status": [
+                {"$group": {"_id": "$status", "count": {"$sum": 1},
+                             "sum": {"$sum": "$total"}}},
+            ],
+            "today": [
+                {"$match": {"created_at": {"$gte": today}}},
+                {"$count": "n"},
+            ],
+            "trend": [
+                {"$match": {"created_at": {"$gte": window_start}}},
+                {"$group": {
+                    "_id": {"$substrBytes": ["$created_at", 0, 10]},
+                    "count": {"$sum": 1},
+                }},
+            ],
+        }},
     ]
-    by_status = {row["_id"]: {"count": row["count"], "sum": row["sum"]}
-                  async for row in db.invoices.aggregate(pipeline_status)}
+    facet = None
+    async for row in db.invoices.aggregate(pipeline):
+        facet = row
+        break
+    facet = facet or {"by_status": [], "today": [], "trend": []}
+
+    by_status = {r["_id"]: {"count": r["count"], "sum": r.get("sum", 0) or 0}
+                  for r in facet["by_status"] if r["_id"]}
 
     total_invoices = sum(v["count"] for v in by_status.values())
     total_value = sum(v["sum"] for v in by_status.values())
     validated = by_status.get("validated", {}).get("count", 0)
-    rejected = by_status.get("rejected", {}).get("count", 0)
-    submitted_like = validated + by_status.get("submitting", {}).get("count", 0)
+    submitting = by_status.get("submitting", {}).get("count", 0)
+    submitted_like = validated + submitting
     success_rate = round((validated / submitted_like) * 100, 1) if submitted_like else 0
+    today_count = (facet["today"][0]["n"] if facet["today"] else 0)
+    tax_collected = round(by_status.get("validated", {}).get("sum", 0) * 0.06, 2)
 
-    today_count = await db.invoices.count_documents({
-        "tenant_id": tenant_id, "created_at": {"$gte": today},
-    })
-
-    # trend last 14 days by created_at date
+    # Fill trend with zero-buckets for missing days
+    trend_map = {r["_id"]: r["count"] for r in facet["trend"]}
     trend = []
     for i in range(13, -1, -1):
-        day = (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat()
-        next_day = (datetime.now(timezone.utc) - timedelta(days=i - 1)).date().isoformat() if i > 0 else "9999"
-        cnt = await db.invoices.count_documents({
-            "tenant_id": tenant_id,
-            "created_at": {"$gte": day, "$lt": next_day},
-        })
-        trend.append({"date": day, "count": cnt})
-
-    tax_collected = round(sum(v.get("sum", 0) or 0
-                              for k, v in by_status.items() if k in ("validated",)) * 0.06, 2)
+        d = (now - timedelta(days=i)).date().isoformat()
+        trend.append({"date": d, "count": trend_map.get(d, 0)})
 
     return {
         "today_count": today_count,
@@ -52,7 +70,7 @@ async def stats(ctx=Depends(require_tenant)):
         "success_rate": success_rate,
         "tax_collected": tax_collected,
         "trend": trend,
-        "adapters": await list_adapters_with_status(db, ctx["tenant_id"]),
+        "adapters": await list_adapters_with_status(db, tenant_id),
     }
 
 

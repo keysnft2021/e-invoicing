@@ -2,28 +2,27 @@
 # Usage:
 #   1. cp .env.example .env  # then edit secrets
 #   2. docker compose up -d --build
-#   3. Point your domain's A record at the droplet IP.
-#   4. (Recommended) Put Caddy / Traefik / a DO load balancer in front for TLS.
-#
-# Services:
-#   mongo   — persistent MongoDB 7 with a named volume
-#   backend — FastAPI on :8001 (internal only)
-#   web     — nginx serving React SPA + reverse-proxying /api to backend
-#             exposed on host port 80 (or ${WEB_HOST_PORT})
+#   3. Point your domain at the droplet IP (A record) or add Caddy/DO LB for TLS
 services:
 
   mongo:
     image: mongo:7
     restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "0.5", "--quiet", "--logpath", "/dev/stdout"]
     volumes:
       - mongo_data:/data/db
     environment:
       - MONGO_INITDB_DATABASE=${DB_NAME:-einvoices}
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 20s
+      interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 20s
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     networks: [internal]
 
   backend:
@@ -42,8 +41,16 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - FRONTEND_URL=${FRONTEND_URL}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-2}
     expose:
       - "8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks: [internal]
 
   web:
@@ -55,9 +62,16 @@ services:
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-/}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${WEB_HOST_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks: [internal]
 
 volumes:

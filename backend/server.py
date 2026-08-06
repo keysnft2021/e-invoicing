@@ -8,8 +8,9 @@ import os
 import logging
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
-from deps import init_db, close_db, get_db
+from deps import init_db, close_db, get_db, ensure_indexes
 from seed import seed
 from routes.auth import router as auth_router
 from routes.companies import router as companies_router
@@ -26,34 +27,44 @@ from routes.bulk import router as bulk_router
 from routes.pdf_route import router as pdf_router
 from routes.api_clients import router as api_clients_router
 
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
+)
 logger = logging.getLogger("einvoice")
 
-app = FastAPI(title="Enterprise E-Invoicing Platform", version="1.0.0")
+app = FastAPI(
+    title="Enterprise E-Invoicing Platform",
+    version="1.0.0",
+    docs_url=os.environ.get("DOCS_URL", "/api/docs"),
+    redoc_url=None,
+    openapi_url="/api/openapi.json",
+)
+
+# Compress JSON responses > 500 bytes — huge win on list endpoints.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # CORS
-origins = [os.environ.get("FRONTEND_URL", "http://localhost:3000")]
 if os.environ.get("CORS_ORIGINS", "*") == "*":
-    # Reflect any allowed origin (dev-friendly, still credentialed)
     app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=".*",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        CORSMiddleware, allow_origin_regex=".*",
+        allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
     )
 else:
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
-                        allow_methods=["*"], allow_headers=["*"])
+    origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware, allow_origins=origins,
+        allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    )
 
 
 @app.on_event("startup")
 async def _startup():
     init_db()
     db = get_db()
+    await ensure_indexes(db)
     await seed(db)
-    logger.info("Seed complete. Admin ready.")
+    logger.info("Startup complete — indexes ensured, demo seed applied.")
 
 
 @app.on_event("shutdown")
@@ -63,7 +74,7 @@ async def _shutdown():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "einvoice-platform"}
+    return {"status": "ok", "service": "einvoice-platform", "version": "1.0.0"}
 
 
 for r in [auth_router, companies_router, masters_router, invoices_router,
