@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only regression + feature verification for LHDN Section D Product form rewrite and medical-only seed data. All 7 test items from the review request passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications": {
+    "products_seed_only_medical": "PASS — SKUs on /products = [MED-CONSULT, MED-VAX-FLU, MED-BLOOD-FBC, MED-DENTAL-SCALE, MED-AESTHETIC-BOTOX, MED-XRAY-CHEST, MED-PHARMA-PARA, MED-PHYSIO] + user-created SKU123 (Panadaol). Zero non-medical rows.",
+    "customers_seed_only_medical": "PASS — MediCare, Wellness Family Clinic, Sunway Medical Group, KPJ Damansara, Pantai Hospital KL, Gleneagles, Columbia Asia, Retail Buyer Sdn Bhd all present. No Pantai Steel / Kuching Trading / Penang Tech / Johor Logistics / Global Retail / Sinar Cahaya.",
+    "suppliers_seed_only_medical": "PASS — Pharmaniaga, Zuellig Pharma, DKSH Healthcare, Kotra Pharma, Hovid Berhad. No SteelWorks / TransLogistics / Tenaga / Office Supplies / Cloud Hosting.",
+    "new_product_modal_fields": "PASS — All data-testids present (prod-classification, prod-item-name, prod-sku, prod-measurement, prod-unit-price, prod-tariff, prod-save-btn). Section D banner rendered. Country/Measurement/Classification dropdowns wired.",
+    "calculations": "PASS — Qty=15, Price=0.50, Discount=0, Tax=0 → Total Before Discount=7.50, Total Excluding Tax=7.50, Tax Amount=0.00, Subtotal=7.50 (matches LHDN screenshot).",
+    "save_flow": "PASS — Created TEST_Panadol 500mg (SKU TEST-PANADOL-500, qty=22, price=5.00). Toast shown, modal closed, new row appears in table.",
+    "regression_dashboard": "PASS — Command Center KPIs render (Today's Invoices, Validated=14, Rejected=13, Total Value RM 37,028.56).",
+    "regression_eiw_submenu": "PASS — EIW Console expands to show Dashboard, My Transaction, Consolidated Task, Debit Note Management, My Fiscal Document, Reports, Operation Log Report, Basic Info."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Products.jsx save handler discards the calculated fields (discount_rate, quantity, fee_charge_rate/amount, country_of_origin) — only unit_price, tax_rate, hs_code, unit and a compound description are POSTed to /api/products. If future line-item automation needs these, the product schema/API must be extended.",
+    "Table column 'Classification' derives from splitting description on ' — '; for user-created products where description does not embed the classification prefix, the fallback string is shown. Consider persisting a dedicated msic_class field.",
+    "Non-critical: recharts warning 'width(-1) and height(-1)' on Command Center chart container — cosmetic, chart still renders."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not requested)", "frontend": "100%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345 (worked)",
+  "seed_data_creation": "Created 1 test product: SKU TEST-PANADOL-500 via UI (kept in DB).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Products page seed is fully MED-* only; expect one user-added row 'Panadaol' (SKU123) and the TEST-PANADOL-500 row from this iteration. LHDN Section D modal and live calculations are working correctly."
+}
