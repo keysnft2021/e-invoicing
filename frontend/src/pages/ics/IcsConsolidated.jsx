@@ -291,11 +291,10 @@ export default function IcsConsolidated() {
                         data-testid="cm-preview">
                     <Eye className="mr-2 h-3.5 w-3.5" /> Invoice Preview
                 </Button>
-                <Button asChild variant="outline" size="sm"
-                        disabled={!oneId()} data-testid="cm-submit">
-                    <Link to={oneId() ? `/invoices/${oneId()}` : "#"}>
-                        <Send className="mr-2 h-3.5 w-3.5" /> Submit
-                    </Link>
+                <Button variant="outline" size="sm"
+                        onClick={() => oneId() ? nav(`/invoices/${oneId()}`) : toast.error("Select one row")}
+                        data-testid="cm-submit">
+                    <Send className="mr-2 h-3.5 w-3.5" /> Submit
                 </Button>
                 <Button variant="outline" size="sm"
                         onClick={() => nav("/ics/my-transaction")} data-testid="cm-view-txn">
@@ -930,8 +929,8 @@ function RunDialog({ open, onOpenChange, onDone }) {
                                 onValueChange={(v) => setForm({ ...form, issuer_tin: v })}>
                             <SelectTrigger data-testid="run-tin"><SelectValue placeholder="Please select" /></SelectTrigger>
                             <SelectContent>
-                                {(tins || []).map((t) => (
-                                    <SelectItem key={t.tin} value={t.tin}>{t.label}</SelectItem>
+                                {(tins || []).map((t, i) => (
+                                    <SelectItem key={`${t.tin}-${i}`} value={t.tin}>{t.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
