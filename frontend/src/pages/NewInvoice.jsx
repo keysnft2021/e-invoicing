@@ -65,15 +65,20 @@ export default function NewInvoice() {
     const selectProduct = (i, pid) => {
         const p = products?.find((x) => x.id === pid);
         if (!p) return;
-        updateLine(i, {
+        const patch = {
             product_id: p.id,
             description: p.name,
             unit_price: p.unit_price,
             tax_rate: p.tax_rate,
             hs_code: p.hs_code,
-            msic_code: p.msic_code || "86201",
-            msic_description: p.msic_description || "General medical services",
-        });
+        };
+        // Only inherit MSIC from product if the product actually has one set.
+        // This preserves any MSIC the user manually chose on this line.
+        if (p.msic_code) {
+            patch.msic_code = p.msic_code;
+            patch.msic_description = p.msic_description || "";
+        }
+        updateLine(i, patch);
     };
 
     const totals = lines.reduce(

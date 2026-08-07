@@ -29,6 +29,30 @@ only seed (8 buyers / 5 suppliers / 8 products).
 
 Testing agent iteration_10 launched.
 
+## Iteration 11 (this)
+- **Global MSIC dropdown** (Malaysia Standard Industrial Classification):
+  - New reusable searchable combobox: `/app/frontend/src/components/common/MsicSelect.jsx`
+    (shadcn Command + Popover, ~1300 codes from `/app/frontend/src/lib/msic.js`,
+    case-insensitive filter on code + description).
+  - Wired into: Products (`prod-msic`), Suppliers (`sup-msic`),
+    New Invoice per line (`line-msic-{i}`).
+  - Invoice Detail Section D Classification column now reads `l.msic_code` /
+    `l.msic_description` per line (was hardcoded "Medical examination").
+  - Invoice Detail Section B supplier MSIC reads from
+    `inv.supplier_msic` / `inv.supplier_msic_desc` (falls back to 86201).
+- **Backend persistence**:
+  - `masters.py` — `SupplierIn` / `ProductIn` accept + project
+    `msic_code`, `msic_description`.
+  - `invoices.py` — `Line` accepts `msic_code`, `msic_description`;
+    `InvoiceIn` accepts `supplier_msic`, `supplier_msic_desc`.
+- **Line-vs-Product precedence** — picking a product on an invoice line
+  only inherits its MSIC when the product actually has one, so a
+  manually-selected line MSIC is preserved.
+
+Tested: iteration_11.json — Products/Suppliers/Invoice line MSIC persistence
+verified via curl; frontend combobox verified by testing agent (95% success,
+1 filter bug fixed).
+
 ## Backlog (P1 → P3)
 - Reusable MalaysiaAddressBlock (DRY across Customers/Suppliers/DebitNotes)
 - Backend `/api/auth/change-password` + `/api/profile`
