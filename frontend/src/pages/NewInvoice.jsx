@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
 import SigningGate from "@/components/common/SigningGate";
+import MsicSelect from "@/components/common/MsicSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,10 @@ export default function NewInvoice() {
     const [shipping, setShipping] = useState(0);
     const [charges, setCharges] = useState(0);
     const [lines, setLines] = useState([
-        { description: "", quantity: 1, unit_price: 0, tax_rate: 6, discount: 0, product_id: null },
+        {
+            description: "", quantity: 1, unit_price: 0, tax_rate: 6, discount: 0,
+            product_id: null, msic_code: "86201", msic_description: "General medical services",
+        },
     ]);
     const [submitting, setSubmitting] = useState(false);
     const [gateOpen, setGateOpen] = useState(false);
@@ -50,7 +54,10 @@ export default function NewInvoice() {
     }, [customers, customerId]);
 
     const addLine = () =>
-        setLines([...lines, { description: "", quantity: 1, unit_price: 0, tax_rate: 6, discount: 0 }]);
+        setLines([...lines, {
+            description: "", quantity: 1, unit_price: 0, tax_rate: 6, discount: 0,
+            msic_code: "86201", msic_description: "General medical services",
+        }]);
     const removeLine = (i) => setLines(lines.filter((_, idx) => idx !== i));
     const updateLine = (i, patch) =>
         setLines(lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -64,6 +71,8 @@ export default function NewInvoice() {
             unit_price: p.unit_price,
             tax_rate: p.tax_rate,
             hs_code: p.hs_code,
+            msic_code: p.msic_code || "86201",
+            msic_description: p.msic_description || "General medical services",
         });
     };
 
@@ -97,6 +106,8 @@ export default function NewInvoice() {
                     discount: Number(l.discount || 0),
                     hs_code: l.hs_code,
                     product_id: l.product_id,
+                    msic_code: l.msic_code || null,
+                    msic_description: l.msic_description || null,
                 })),
                 shipping: Number(shipping || 0),
                 charges: Number(charges || 0),
@@ -271,6 +282,19 @@ export default function NewInvoice() {
                                             }
                                             data-testid={`line-desc-${i}`}
                                         />
+                                        <div className="mt-1">
+                                            <Label className="text-[10px]">MSIC Classification</Label>
+                                            <MsicSelect
+                                                value={l.msic_code}
+                                                onChange={(code, desc) =>
+                                                    updateLine(i, {
+                                                        msic_code: code,
+                                                        msic_description: desc,
+                                                    })
+                                                }
+                                                testid={`line-msic-${i}`}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="col-span-4 md:col-span-2 space-y-1.5">
                                         <Label className="text-[10px]">Qty</Label>

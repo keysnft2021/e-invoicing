@@ -123,7 +123,11 @@ export default function InvoiceDetail() {
                 <Field l="Tourism Tax Registration Number" v="NA" />
                 <Field l="Contact Number" v={inv.supplier_phone || "+60312345678"} />
                 <Field l="E-mail" v={inv.supplier_email || "—"} />
-                <Field l="Malaysia Standard Industrial Classification" v="(86201)General medical services" />
+                <Field l="Malaysia Standard Industrial Classification" v={
+                    inv.supplier_msic
+                        ? `(${inv.supplier_msic}) ${inv.supplier_msic_desc || ""}`
+                        : "(86201) General medical services"
+                } />
                 <Field l="Authorisation Number For Certified Exporter" v="NA" />
                 <Field l="Business Activity Description" v="GP clinic with aesthetic services" full />
                 <SubHeader label="Address" />
@@ -180,7 +184,11 @@ export default function InvoiceDetail() {
                             return (
                                 <tr key={i} className="border-b border-border/50">
                                     <td className="px-3 py-2 font-mono text-xs">{i + 1}</td>
-                                    <td className="px-3 py-2">Medical examination</td>
+                                    <td className="px-3 py-2 text-xs">
+                                        {l.msic_code
+                                            ? `(${l.msic_code}) ${l.msic_description || ""}`
+                                            : "Medical examination"}
+                                    </td>
                                     <td className="px-3 py-2">{l.description || "Medicine"}</td>
                                     <td className="px-3 py-2">each</td>
                                     <td className="px-3 py-2 text-right font-mono">{(l.quantity || 0).toFixed(2)}</td>

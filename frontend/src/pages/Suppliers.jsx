@@ -16,8 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Save, X } from "lucide-react";
 import { COUNTRIES, MY_STATES, citiesFor, areasFor } from "@/lib/malaysia";
-import { MSIC_CODES } from "@/lib/msic";
-const MSIC_OPTIONS = MSIC_CODES.map((m) => ({ v: `(${m.code})${m.description}`, l: `(${m.code}) ${m.description}` }));
+import MsicSelect from "@/components/common/MsicSelect";
 
 const ID_TYPES = ["Business Registration Number", "NRIC", "Passport", "Army"];
 
@@ -26,7 +25,8 @@ const EMPTY = {
     id_type: "Business Registration Number", id_value: "",
     sst: "NA", tourism_tax: "NA",
     contact: "", email: "",
-    msic: "(86201)General medical services",
+    msic_code: "86201",
+    msic_description: "General medical services",
     authorisation: "NA",
     activity: "",
     country: "MYS", state: "Perak",
@@ -49,6 +49,8 @@ export default function Suppliers() {
             await api.post("/suppliers", {
                 name: form.name, tin: form.tin, brn: form.id_value,
                 email: form.email, phone: form.contact,
+                msic_code: form.msic_code,
+                msic_description: form.msic_description,
                 billing_address: [form.addr_0, form.addr_1, form.addr_2, form.city, form.state]
                     .filter(Boolean).join(", "),
             });
@@ -107,8 +109,14 @@ export default function Suppliers() {
                                         <Input value={form.email} onChange={(e) => set("email", e.target.value)} />
                                     </TF>
                                     <TF l="Malaysia Standard Industrial Classification">
-                                        <SelectField value={form.msic} onValueChange={(v) => set("msic", v)}
-                                                     options={MSIC_OPTIONS} testid="sup-msic" />
+                                        <MsicSelect
+                                            value={form.msic_code}
+                                            onChange={(code, desc) => {
+                                                set("msic_code", code);
+                                                set("msic_description", desc);
+                                            }}
+                                            testid="sup-msic"
+                                        />
                                     </TF>
                                     <TF l="Authorisation Number For Certified Exporter">
                                         <Input value={form.authorisation} onChange={(e) => set("authorisation", e.target.value)} />

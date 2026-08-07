@@ -102,12 +102,14 @@ class SupplierIn(BaseModel):
     currency: str = "MYR"
     payment_terms: str = "NET30"
     billing_address: Optional[str] = None
+    msic_code: Optional[str] = None
+    msic_description: Optional[str] = None
 
 
 SUP_LIST_PROJ = {
     "name": 1, "tin": 1, "brn": 1, "email": 1, "phone": 1,
     "country": 1, "currency": 1, "payment_terms": 1, "created_at": 1,
-    "billing_address": 1,
+    "billing_address": 1, "msic_code": 1, "msic_description": 1,
 }
 
 
@@ -168,12 +170,14 @@ class ProductIn(BaseModel):
     classification_code: Optional[str] = None
     unit: str = "PCS"
     description: Optional[str] = None
+    msic_code: Optional[str] = None
+    msic_description: Optional[str] = None
 
 
 PROD_LIST_PROJ = {
     "sku": 1, "name": 1, "type": 1, "unit_price": 1, "tax_code": 1,
     "tax_rate": 1, "hs_code": 1, "classification_code": 1, "unit": 1,
-    "description": 1, "created_at": 1,
+    "description": 1, "created_at": 1, "msic_code": 1, "msic_description": 1,
 }
 
 

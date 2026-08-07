@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
+import MsicSelect from "@/components/common/MsicSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,24 +18,15 @@ import { fmtMoney } from "@/lib/format";
 import { Plus, Save, X } from "lucide-react";
 import { COUNTRIES } from "@/lib/malaysia";
 
-// MSIC-mapped classifications for Malaysian medical/clinic e-invoices
-const CLASSIFICATIONS = [
-    "Medical examination or vaccination expenses",
-    "Consultation fees (physician / specialist)",
-    "Laboratory and diagnostic services",
-    "Pharmacy — dispensed medicine",
-    "Dental services",
-    "Physiotherapy and rehabilitation",
-    "Aesthetic / cosmetic procedures",
-    "Radiology / imaging (X-ray, CT, MRI)",
-    "Surgery — day-care procedure",
-    "Nursing / home care service",
-];
+// Default MSIC code for medical/clinic services
+const DEFAULT_MSIC = "86201";
+const DEFAULT_MSIC_DESC = "General medical services";
 
 const MEASUREMENTS = ["each", "SES", "DOSE", "TEST", "STRIP", "UNIT", "MO", "HR", "BOTTLE"];
 
 const EMPTY = {
-    classification: "Medical examination or vaccination expenses",
+    msic_code: DEFAULT_MSIC,
+    msic_description: DEFAULT_MSIC_DESC,
     item_name: "",
     sku: "",
     measurement: "each",
@@ -83,7 +75,9 @@ export default function Products() {
                 hs_code: form.tariff_code,
                 classification_code: "022",
                 unit: form.measurement,
-                description: `${form.classification}${form.description ? " — " + form.description : ""}`,
+                msic_code: form.msic_code,
+                msic_description: form.msic_description,
+                description: form.description || "",
             });
             toast.success("Product created");
             setOpen(false); setForm({ ...EMPTY });
@@ -116,10 +110,15 @@ export default function Products() {
                             <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
                                 <SectionBar title="Section D: Line Item Details" />
                                 <div className="mb-4 grid grid-cols-1 gap-x-8 gap-y-4 rounded-b-md border-x border-b border-border bg-card px-6 py-5 md:grid-cols-2">
-                                    <TF l="Classification">
-                                        <SF value={form.classification} onValueChange={(v) => set("classification", v)}
-                                            options={CLASSIFICATIONS.map((c) => ({ v: c, l: c }))}
-                                            testid="prod-classification" />
+                                    <TF l="MSIC Classification">
+                                        <MsicSelect
+                                            value={form.msic_code}
+                                            onChange={(code, desc) => {
+                                                set("msic_code", code);
+                                                set("msic_description", desc);
+                                            }}
+                                            testid="prod-msic"
+                                        />
                                     </TF>
                                     <TF l="Item Name">
                                         <Input value={form.item_name} onChange={(e) => set("item_name", e.target.value)}
@@ -201,7 +200,7 @@ export default function Products() {
                             <tr>
                                 <th className="px-4 py-3 text-left">SKU</th>
                                 <th className="px-4 py-3 text-left">Item Name</th>
-                                <th className="px-4 py-3 text-left">Classification</th>
+                                <th className="px-4 py-3 text-left">MSIC</th>
                                 <th className="px-4 py-3 text-left">Measurement</th>
                                 <th className="px-4 py-3 text-right">Unit Price</th>
                                 <th className="px-4 py-3 text-right">Tax Rate</th>
@@ -212,8 +211,10 @@ export default function Products() {
                                 <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/40">
                                     <td className="px-4 py-3 font-mono text-xs">{p.sku}</td>
                                     <td className="px-4 py-3 font-medium">{p.name}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                        {(p.description || "").split(" — ")[0] || "Medical examination or vaccination expenses"}
+                                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                                        {p.msic_code
+                                            ? `(${p.msic_code}) ${p.msic_description || ""}`
+                                            : (p.description || "").split(" — ")[0] || "—"}
                                     </td>
                                     <td className="px-4 py-3">{p.unit || "each"}</td>
                                     <td className="px-4 py-3 text-right font-mono">{fmtMoney(p.unit_price)}</td>

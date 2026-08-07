@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only testing of the new searchable MSIC combobox across Products, Suppliers, and New Invoice pages, plus the InvoiceDetail Section D Classification column. Found and fixed a critical filter bug in MsicSelect.jsx (cmdk case-sensitivity) that caused most legitimate matches to be hidden — e.g. 'dental' returned only 4/5 matches and hid 86203 'Dental services'; 'general medical' returned 0 matches and hid 86201. After the one-line fix, all searchable behaviours work as expected. Products/Suppliers save, and a draft invoice was created (id 6a75616467265bc869f840b9) with the Classification column correctly rendering '(86201) General medical services' — replacing the previously hardcoded 'Medical examination'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MsicSelect (Command filter)",
+        "issue": "cmdk passes the item value string UNCHANGED to the custom filter (not lowercased). The filter did `itemValue.includes(search.toLowerCase())` which caused all items with any uppercase letter in the description to be excluded from search results. Concretely: 'dental' hid 86203 'Dental services' (capital D); 'general medical' returned zero matches for 86201 'General medical services'.",
+        "selector": "/app/frontend/src/components/common/MsicSelect.jsx line 59-62",
+        "priority": "HIGH_FIXED_BY_TESTER"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "New Invoice — Line item: MSIC selected first, then product picked",
+        "issue": "Picking a Product from the 'Pick product' select on a line row overwrites the MSIC that was just selected via <MsicSelect> (the product's own msic_code takes over). This is likely intentional 'product defaults' behaviour but the user cannot override MSIC per-line AFTER picking the product. If manual per-line MSIC override is a product requirement, the product-pick handler should NOT clobber a user-selected msic_code, or the MSIC field should live below the product select so its natural to re-select. Please confirm intended behaviour.",
+        "affected_selectors": ["[data-testid=line-msic-0]", "Pick product select"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Decide product-vs-msic precedence on invoice lines (see integration_issues above). Currently: product wins. If user needs to override, either (a) move MsicSelect below product picker and don't reset msic when product changes if user has manually chosen, or (b) make it explicit in UI copy that the product controls MSIC.",
+    "The review request stated '86903 Dental services' — that MSIC code is actually 'Physiotherapy and occupational therapy service'. The real Dental services code is 86203. Update the request/docs.",
+    "Consider using cmdk's built-in fuzzy filter (remove the custom `filter` prop) for a better search UX — it will match on both code and description automatically."
+  ],
+  "critical_code_review_comments": [
+    "MsicSelect.jsx custom filter assumed cmdk normalizes itemValue to lowercase — it does not in the installed cmdk version. Always normalize BOTH sides of a substring compare.",
+    "MsicSelect renders all ~1112 <CommandItem> nodes on every mount. With ~1300 codes this is fine but on slow devices consider lazy list / virtualization if you expand the codebook further."
+  ],
+  "updated_files": ["/app/frontend/src/components/common/MsicSelect.jsx"],
+  "success_rate": {"backend": "not_tested", "frontend": "95%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345",
+  "seed_data_creation": "Created 1 test supplier (via UI, MSIC 86203) and 1 draft invoice (id 6a75616467265bc869f840b9) with line MSIC persisted. Also created some TEST products in earlier attempts.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "MsicSelect filter bug was fixed by testing agent (case sensitivity). All 3 MSIC surfaces (prod-msic, sup-msic, line-msic-{i}) render correctly, search+filter works, selection persists, and InvoiceDetail Section D reads from l.msic_code/msic_description. The only open UX question is whether picking a product on an invoice line should overwrite a manually-selected line MSIC.",
+  "rca of the issue": "cmdk Command component in the installed version passes the CommandItem `value` prop verbatim (case preserved) into the user-supplied `filter(itemValue, search)` function. Our MsicSelect filter was `itemValue.includes(search.toLowerCase())`. Since itemValue = '(86203) Dental services' contained capital 'D', a lowercase search 'dental' failed to find it. Fix: lowercase itemValue before comparing. One-line change in /app/frontend/src/components/common/MsicSelect.jsx. Reproduced by opening the New Product modal, opening MSIC dropdown, typing 'dental' → only 4 items shown, 86203 missing. After fix → 5 items shown with 86203 present."
+}

@@ -22,6 +22,8 @@ class Line(BaseModel):
     tax_rate: float = 6
     hs_code: Optional[str] = None
     classification_code: Optional[str] = None
+    msic_code: Optional[str] = None
+    msic_description: Optional[str] = None
     discount: float = 0
 
 
@@ -49,6 +51,8 @@ class InvoiceIn(BaseModel):
     validation_result: Optional[str] = "pending"
     supplier_tin: Optional[str] = None
     supplier_name: Optional[str] = None
+    supplier_msic: Optional[str] = None
+    supplier_msic_desc: Optional[str] = None
 
 
 class CancelBody(BaseModel):
