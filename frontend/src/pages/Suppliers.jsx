@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, Save, X } from "lucide-react";
 import { COUNTRIES, MY_STATES, citiesFor, areasFor } from "@/lib/malaysia";
+import { MSIC_CODES } from "@/lib/msic";
+const MSIC_OPTIONS = MSIC_CODES.map((m) => ({ v: `(${m.code})${m.description}`, l: `(${m.code}) ${m.description}` }));
 
 const ID_TYPES = ["Business Registration Number", "NRIC", "Passport", "Army"];
 
@@ -105,7 +107,8 @@ export default function Suppliers() {
                                         <Input value={form.email} onChange={(e) => set("email", e.target.value)} />
                                     </TF>
                                     <TF l="Malaysia Standard Industrial Classification">
-                                        <Input value={form.msic} onChange={(e) => set("msic", e.target.value)} />
+                                        <SelectField value={form.msic} onValueChange={(v) => set("msic", v)}
+                                                     options={MSIC_OPTIONS} testid="sup-msic" />
                                     </TF>
                                     <TF l="Authorisation Number For Certified Exporter">
                                         <Input value={form.authorisation} onChange={(e) => set("authorisation", e.target.value)} />

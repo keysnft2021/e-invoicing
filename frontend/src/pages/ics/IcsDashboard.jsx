@@ -57,7 +57,7 @@ export default function IcsDashboard() {
     return (
         <div>
             <PageHeader
-                kicker={isAll ? "EIW · Integration Console · All clinics" : `EIW · ${current?.name || ""}`}
+                kicker={isAll ? "EIS · Integration Console · All clinics" : `EIS · ${current?.name || ""}`}
                 title="Sales Invoices"
                 subtitle={
                     isAll

@@ -62,7 +62,7 @@ export default function DebitNotes() {
     return (
         <div>
             <PageHeader
-                kicker="EIW · Debit Note Management"
+                kicker="EIS · Debit Note Management"
                 title="Debit Note Management"
                 subtitle="Select a source invoice to raise a debit note against."
             />

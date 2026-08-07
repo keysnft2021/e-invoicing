@@ -120,7 +120,7 @@ export default function IcsFiscalDocument() {
 
     return (
         <div>
-            <PageHeader kicker="EIW · My Fiscal Document" title="Invoice Management"
+            <PageHeader kicker="EIS · My Fiscal Document" title="Invoice Management"
                         subtitle="LHDN e-invoice fiscal document register." />
 
             <section className="mb-4 rounded-md border border-border bg-card">

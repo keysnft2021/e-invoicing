@@ -195,7 +195,7 @@ export default function IcsTransactions() {
     return (
         <div>
             <PageHeader
-                kicker="EIW · My Transaction"
+                kicker="EIS · My Transaction"
                 title="Transaction Data Management"
                 subtitle="Search, add, modify, void and submit e-invoice transactions to LHDN MyInvois."
             />

@@ -202,7 +202,7 @@ export default function IcsConsolidated() {
     return (
         <div>
             <PageHeader
-                kicker="EIW · My Transaction"
+                kicker="EIS · My Transaction"
                 title="Invoicing Consolidated Management"
                 subtitle="Monthly consolidated e-invoices issued to General Public (LHDN retail-aggregated flow)."
             />
