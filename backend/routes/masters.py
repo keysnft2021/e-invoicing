@@ -104,12 +104,31 @@ class SupplierIn(BaseModel):
     billing_address: Optional[str] = None
     msic_code: Optional[str] = None
     msic_description: Optional[str] = None
+    # LHDN portal fields
+    company_id: Optional[str] = None
+    id_type: Optional[str] = "Business Registration Number"
+    sst_registration_number: Optional[str] = None
+    tourism_tax_registration_number: Optional[str] = None
+    authorisation_number: Optional[str] = None
+    business_activity: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    addr_line_0: Optional[str] = None
+    addr_line_1: Optional[str] = None
+    addr_line_2: Optional[str] = None
+    postal_zone: Optional[str] = None
+    enabled: Optional[bool] = True
 
 
 SUP_LIST_PROJ = {
     "name": 1, "tin": 1, "brn": 1, "email": 1, "phone": 1,
     "country": 1, "currency": 1, "payment_terms": 1, "created_at": 1,
     "billing_address": 1, "msic_code": 1, "msic_description": 1,
+    "company_id": 1, "id_type": 1, "sst_registration_number": 1,
+    "tourism_tax_registration_number": 1, "authorisation_number": 1,
+    "business_activity": 1, "state": 1, "city": 1,
+    "addr_line_0": 1, "addr_line_1": 1, "addr_line_2": 1, "postal_zone": 1,
+    "enabled": 1, "updated_at": 1,
 }
 
 
@@ -125,6 +144,15 @@ async def list_suppliers(
     cur = (db.suppliers.find(query, SUP_LIST_PROJ)
                         .sort("created_at", -1).skip(skip).limit(limit))
     return [_s(c) async for c in cur]
+
+
+@router.get("/api/suppliers/{cid}")
+async def get_supplier(cid: str, ctx=Depends(require_tenant)):
+    db = get_db()
+    doc = await db.suppliers.find_one({"_id": ObjectId(cid), "tenant_id": ctx["tenant_id"]})
+    if not doc:
+        raise HTTPException(404, "Not found")
+    return _s(doc)
 
 
 @router.post("/api/suppliers")
