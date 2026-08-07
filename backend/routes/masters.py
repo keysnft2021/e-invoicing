@@ -172,12 +172,25 @@ class ProductIn(BaseModel):
     description: Optional[str] = None
     msic_code: Optional[str] = None
     msic_description: Optional[str] = None
+    # LHDN portal fields
+    company_id: Optional[str] = None
+    country_of_origin: Optional[str] = "MYS"
+    discount_rate: float = 0
+    discount_reason: Optional[str] = None
+    fee_charge_rate: float = 0
+    fee_charge_reason: Optional[str] = None
+    remarks: Optional[str] = None
+    tax_details: Optional[list] = None
+    enabled: Optional[bool] = True
 
 
 PROD_LIST_PROJ = {
     "sku": 1, "name": 1, "type": 1, "unit_price": 1, "tax_code": 1,
     "tax_rate": 1, "hs_code": 1, "classification_code": 1, "unit": 1,
     "description": 1, "created_at": 1, "msic_code": 1, "msic_description": 1,
+    "company_id": 1, "country_of_origin": 1, "discount_rate": 1,
+    "discount_reason": 1, "fee_charge_rate": 1, "fee_charge_reason": 1,
+    "remarks": 1, "tax_details": 1, "enabled": 1,
 }
 
 
@@ -193,6 +206,15 @@ async def list_products(
     cur = (db.products.find(query, PROD_LIST_PROJ)
                        .sort("created_at", -1).skip(skip).limit(limit))
     return [_s(c) async for c in cur]
+
+
+@router.get("/api/products/{cid}")
+async def get_product(cid: str, ctx=Depends(require_tenant)):
+    db = get_db()
+    doc = await db.products.find_one({"_id": ObjectId(cid), "tenant_id": ctx["tenant_id"]})
+    if not doc:
+        raise HTTPException(404, "Not found")
+    return _s(doc)
 
 
 @router.post("/api/products")

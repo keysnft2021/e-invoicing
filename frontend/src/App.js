@@ -18,6 +18,7 @@ const InvoiceDetail    = lazy(() => import("@/pages/InvoiceDetail"));
 const Customers        = lazy(() => import("@/pages/Customers"));
 const Suppliers        = lazy(() => import("@/pages/Suppliers"));
 const Products         = lazy(() => import("@/pages/Products"));
+const ProductForm      = lazy(() => import("@/pages/ProductForm"));
 const Companies        = lazy(() => import("@/pages/Companies"));
 const Users            = lazy(() => import("@/pages/Users"));
 const RolesPage        = lazy(() => import("@/pages/RolesPage"));
@@ -61,6 +62,8 @@ export default function App() {
                                 <Route path="/customers" element={<Customers />} />
                                 <Route path="/suppliers" element={<Suppliers />} />
                                 <Route path="/products" element={<Products />} />
+                                <Route path="/products/new" element={<ProductForm />} />
+                                <Route path="/products/:id/edit" element={<ProductForm />} />
                                 <Route path="/companies" element={<Companies />} />
                                 <Route path="/users" element={<Users />} />
                                 <Route path="/roles" element={<RolesPage />} />
