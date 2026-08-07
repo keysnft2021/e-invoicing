@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only E2E test of the 'Modify & Issue' flow on the NewInvoice page. All 11 requested behaviours pass: navigation with ?from={id}, breadcrumb 'Modify & Issue', all 8 A-H section headers with LHDN Red bars, prefills for Section A (Invoice/MYR/1/date), Section B supplier TIN/Name/MSIC, MSIC search working (typing 'dental' returns 5 items including 86203 Dental services), Section C buyer picker with reactive read-only fields updating on pick, Section D line prefill (MSIC Test Item, qty 1, price 100, MSIC 86201 General medical services), line MSIC editable via combobox (changed to 86203), qty/price live-recalc (3 * 50 = 150.00), Section G shipping/charges flow to Section H Total Payable live (150 + 9 tax + 20 shipping + 5 charges = 184.00), 'Add line' inserts a new row with data-testid=line-msic-1, Save as draft POSTs to /api/invoices and navigates to the new /invoices/{id} with InvoiceDetail Section D Classification correctly rendering '(86203) Dental services' (per-line MSIC persisted end-to-end), Close/X button returns to the source detail page, and regression /invoices/new (without ?from) renders with breadcrumb 'New Invoice', blank line description, default MSIC (86201) General medical services, and default buyer (Wellness Family Clinic).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NewInvoice.jsx is ~680 lines and does five concerns in one file (state, prefill effects, totals, save, presentational sub-components). Consider splitting into hooks (useInvoiceForm, useLineTotals) and a components/newInvoice/ folder for maintainability, but not blocking.",
+    "Section F 'Tax Rate' currently displays only the FIRST line's tax_rate, which is misleading if lines have mixed tax rates. Consider aggregating by tax_rate group or clearly labelling as 'primary rate'.",
+    "Section D 'Product' picker still overwrites a manually chosen line MSIC when a product is selected afterwards (carried over from iteration 11). Consider only overwriting msic if it currently equals the default 86201 OR if the user hasn't manually chosen one this session."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not_tested", "frontend": "100%"},
+  "test_credentials": "admin@einvoice.my / Admin@12345",
+  "seed_data_creation": "Created 1 new draft invoice via the Modify & Issue flow proving line MSIC (86203 Dental services) persistence. Also created 1 blank draft via regression /invoices/new flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The 'Modify & Issue' end-to-end flow (source invoice 6a75616467265bc869f840b9 with line MSIC 86201) is verified working. Prefills, MSIC combobox search, live totals, buyer switch, Add/Remove line, Save-as-draft persistence, and back navigation all pass. Regression /invoices/new (no ?from) also renders correctly with defaults. Only the pre-existing UX quirk (product picker clobbering manually-chosen line MSIC) remains as a design decision for the main agent.",
+  "rca of the issue": "N/A — no regressions found in this iteration."
+}
