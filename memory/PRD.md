@@ -53,6 +53,28 @@ Tested: iteration_11.json — Products/Suppliers/Invoice line MSIC persistence
 verified via curl; frontend combobox verified by testing agent (95% success,
 1 filter bug fixed).
 
+## Iteration 12 (this)
+- **Modify & Issue → full LHDN A–H editable form**:
+  - Full rewrite of `/app/frontend/src/pages/NewInvoice.jsx` (~500 lines).
+    Now renders Sections A (Basic Info), B (Supplier), C (Buyer),
+    D (Line Items table), E (Payment), F (Tax auto), G (Additional Charge)
+    and H (Summary) — matching the InvoiceDetail LHDN structure exactly,
+    but every field is editable.
+  - `?from={invoice_id}` query param — the page fetches the source
+    invoice and pre-fills invoice_type, dates, currency, supplier
+    identity, supplier MSIC (code + description), customer, and every
+    line item (description, qty, price, tax, discount, MSIC).
+  - MSIC dropdown (`MsicSelect`) appears in Section B (`b-msic`) and on
+    every Section D line row (`line-msic-{i}`).
+  - Section D line rows have MSIC + product picker + item name +
+    measurement + qty + unit price + discount% + tax% + auto Excl.Tax
+    + delete row; "Add line" button below the table.
+  - Section H summary auto-calculates: Total Net, Discount, Charges,
+    Excl.Tax, Tax, Incl.Tax, Rounding, Payable — live-updated as user
+    types.
+  - Save-as-draft creates a draft; Save & Submit routes into the
+    Step-Up MFA `SigningGate` and calls `/api/invoices/{id}/submit`.
+
 ## Backlog (P1 → P3)
 - Reusable MalaysiaAddressBlock (DRY across Customers/Suppliers/DebitNotes)
 - Backend `/api/auth/change-password` + `/api/profile`
