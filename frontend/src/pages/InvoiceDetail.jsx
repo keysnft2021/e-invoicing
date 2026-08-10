@@ -158,7 +158,7 @@ export default function InvoiceDetail() {
 
             <SectionBar title="Section D: Line Item Details" />
             <div className="mb-6 overflow-x-auto rounded-b-md border-x border-b border-border bg-card">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1200px] text-sm">
                     <thead className="bg-secondary/50 text-xs uppercase text-muted-foreground">
                         <tr>
                             <Th>NO.</Th>
@@ -216,7 +216,7 @@ export default function InvoiceDetail() {
 
             <SectionBar title="Section F: Tax Details" />
             <div className="mb-6 overflow-x-auto rounded-b-md border-x border-b border-border bg-card">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[900px] text-sm">
                     <thead className="bg-secondary/50 text-xs uppercase text-muted-foreground">
                         <tr>
                             <Th>NO.</Th><Th>Tax Type</Th><Th>Tax Rate</Th>

@@ -240,7 +240,7 @@ export default function Suppliers() {
 
             {isLoading ? <Skeleton className="h-64 w-full" /> : (
                 <div className="overflow-x-auto rounded-md border border-border bg-card">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[1400px] text-sm">
                         <thead className="bg-primary text-primary-foreground">
                             <tr>
                                 <th className="w-10 px-3 py-3">

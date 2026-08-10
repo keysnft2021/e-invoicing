@@ -12,12 +12,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Sun, Moon, LogOut, Building2, CheckCircle2, User, KeyRound, ShieldCheck } from "lucide-react";
+import { Search, Sun, Moon, LogOut, Building2, CheckCircle2, User, KeyRound, ShieldCheck, Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { ModifyPasswordDialog, AccountSecurityDialog } from "@/pages/Profile";
 
-export default function Topbar() {
+export default function Topbar({ onMobileMenu }) {
     const { user, logout } = useAuth();
     const { theme, toggle } = useTheme();
     const { current, companies, switchCompany, isAll } = useCompany();
@@ -29,7 +29,18 @@ export default function Topbar() {
     const initials = (user?.email || "?").split("@")[0].slice(0, 2).toUpperCase();
 
     return (
-        <header className="flex items-center gap-3 border-b border-border bg-background px-6 py-3">
+        <header className="flex items-center gap-2 sm:gap-3 border-b border-border bg-background px-3 sm:px-6 py-3">
+            {/* Mobile hamburger */}
+            <button
+                type="button"
+                onClick={onMobileMenu}
+                className="rounded-md p-1.5 text-foreground hover:bg-secondary md:hidden"
+                data-testid="topbar-menu-btn"
+                aria-label="Open menu"
+            >
+                <Menu className="h-5 w-5" />
+            </button>
+
             <div className="relative flex-1 max-w-xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input

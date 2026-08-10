@@ -237,8 +237,8 @@ export default function Products() {
 
             {/* Table */}
             {isLoading ? <Skeleton className="h-64 w-full" /> : (
-                <div className="overflow-hidden rounded-md border border-border bg-card">
-                    <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-md border border-border bg-card">
+                    <table className="w-full min-w-[1100px] text-sm">
                         <thead className="bg-primary text-primary-foreground">
                             <tr>
                                 <th className="w-10 px-3 py-3">

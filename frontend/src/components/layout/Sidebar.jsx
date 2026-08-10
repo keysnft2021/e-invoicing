@@ -26,6 +26,7 @@ import {
     FileArchive,
     BarChart3,
     Info,
+    X as XIcon,
 } from "lucide-react";
 
 const ICS_CHILDREN = [
@@ -56,7 +57,7 @@ const NAV = [
     { to: "/settings", label: "Settings", icon: SettingsIcon, testid: "nav-settings" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }) {
     const [collapsed, setCollapsed] = useState(false);
     const [openGroups, setOpenGroups] = useState({});
     const { user } = useAuth();
@@ -78,16 +79,46 @@ export default function Sidebar() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.pathname]);
 
+    // Auto-close mobile drawer on route change
+    useEffect(() => {
+        if (mobileOpen) onMobileClose();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.pathname]);
+
     const toggleGroup = (label) => setOpenGroups((s) => ({ ...s, [label]: !s[label] }));
 
     return (
-        <aside
-            data-testid="app-sidebar"
-            className={cn(
-                "hidden md:flex flex-col border-r border-border bg-card/40 transition-[width] duration-200",
-                collapsed ? "w-[68px]" : "w-[248px]",
+        <>
+            {/* Mobile backdrop */}
+            {mobileOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                    onClick={onMobileClose}
+                    data-testid="sidebar-backdrop"
+                />
             )}
-        >
+            <aside
+                data-testid="app-sidebar"
+                className={cn(
+                    "flex flex-col border-r border-border bg-card transition-[width,transform] duration-200",
+                    // Desktop
+                    "hidden md:flex",
+                    collapsed ? "md:w-[68px]" : "md:w-[248px]",
+                    // Mobile drawer
+                    mobileOpen && "!flex fixed inset-y-0 left-0 z-50 w-[280px] shadow-2xl",
+                )}
+            >
+                {/* Mobile close button */}
+                {mobileOpen && (
+                    <button
+                        onClick={onMobileClose}
+                        className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-muted-foreground hover:bg-secondary md:hidden"
+                        data-testid="sidebar-close-btn"
+                        aria-label="Close menu"
+                    >
+                        <XIcon className="h-4 w-4" />
+                    </button>
+                )}
             <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border">
                 <div className="h-8 w-8 rounded-lg bg-foreground text-background grid place-items-center">
                     <Sparkles className="h-4 w-4" />
@@ -210,7 +241,7 @@ export default function Sidebar() {
                 <button
                     data-testid="sidebar-collapse-btn"
                     onClick={() => setCollapsed((c) => !c)}
-                    className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary"
+                    className="hidden md:flex w-full items-center justify-center gap-2 rounded-md border border-border bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary"
                 >
                     {collapsed ? (
                         <ChevronsRight className="h-3.5 w-3.5" />
@@ -222,5 +253,6 @@ export default function Sidebar() {
                 </button>
             </div>
         </aside>
+        </>
     );
 }

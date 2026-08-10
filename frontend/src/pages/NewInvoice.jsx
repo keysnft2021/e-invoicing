@@ -438,7 +438,7 @@ export default function NewInvoice() {
             {/* Section D — Line Items */}
             <SectionBar title="Section D: Line Item Details" />
             <div className="mb-6 overflow-x-auto rounded-b-md border-x border-b border-border bg-card">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1400px] text-sm">
                     <thead className="bg-secondary/50 text-xs uppercase text-muted-foreground">
                         <tr>
                             <Th>NO.</Th>
@@ -556,7 +556,7 @@ export default function NewInvoice() {
             {/* Section F — Tax (auto) */}
             <SectionBar title="Section F: Tax Details (auto)" />
             <div className="mb-6 overflow-x-auto rounded-b-md border-x border-b border-border bg-card">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[900px] text-sm">
                     <thead className="bg-secondary/50 text-xs uppercase text-muted-foreground">
                         <tr>
                             <Th>NO.</Th><Th>Tax Type</Th><Th>Tax Rate</Th>

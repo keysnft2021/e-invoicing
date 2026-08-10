@@ -9,6 +9,7 @@ import { CompanyProvider } from "@/context/CompanyContext";
 export default function AppShell() {
     const { user, ready } = useAuth();
     const [cmdOpen, setCmdOpen] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     useEffect(() => {
         const onKey = (e) => {
@@ -33,12 +34,18 @@ export default function AppShell() {
     return (
         <CompanyProvider>
             <div className="flex h-screen w-screen overflow-hidden bg-background">
-                <Sidebar />
-                <div className="flex flex-1 flex-col overflow-hidden">
-                    <Topbar onOpenCommand={() => setCmdOpen(true)} />
+                <Sidebar
+                    mobileOpen={mobileNavOpen}
+                    onMobileClose={() => setMobileNavOpen(false)}
+                />
+                <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+                    <Topbar
+                        onOpenCommand={() => setCmdOpen(true)}
+                        onMobileMenu={() => setMobileNavOpen(true)}
+                    />
                     <main
                         data-testid="app-main"
-                        className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8"
+                        className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-8"
                     >
                         <Outlet />
                     </main>

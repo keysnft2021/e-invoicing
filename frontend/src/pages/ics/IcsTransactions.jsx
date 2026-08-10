@@ -418,7 +418,7 @@ export default function IcsTransactions() {
                 <Skeleton className="h-48 w-full" />
             ) : (
                 <div className="overflow-x-auto rounded-xl border border-border bg-card">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[1400px] text-sm">
                         <thead className="bg-accent text-accent-foreground">
                             <tr>
                                 <th className="w-10 px-3 py-3">
