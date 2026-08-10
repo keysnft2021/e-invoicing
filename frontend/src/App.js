@@ -16,6 +16,7 @@ const Invoices         = lazy(() => import("@/pages/Invoices"));
 const NewInvoice       = lazy(() => import("@/pages/NewInvoice"));
 const InvoiceDetail    = lazy(() => import("@/pages/InvoiceDetail"));
 const Customers        = lazy(() => import("@/pages/Customers"));
+const BuyerForm        = lazy(() => import("@/pages/BuyerForm"));
 const Suppliers        = lazy(() => import("@/pages/Suppliers"));
 const Products         = lazy(() => import("@/pages/Products"));
 const ProductForm      = lazy(() => import("@/pages/ProductForm"));
@@ -63,6 +64,8 @@ export default function App() {
                                 <Route path="/invoices/new" element={<NewInvoice />} />
                                 <Route path="/invoices/:id" element={<InvoiceDetail />} />
                                 <Route path="/customers" element={<Customers />} />
+                                <Route path="/customers/new" element={<BuyerForm />} />
+                                <Route path="/customers/:id/edit" element={<BuyerForm />} />
                                 <Route path="/suppliers" element={<Suppliers />} />
                                 <Route path="/suppliers/new" element={<SupplierForm />} />
                                 <Route path="/suppliers/:id/edit" element={<SupplierForm />} />

@@ -254,11 +254,11 @@ export default function FrequentContacts() {
 
             {/* Table */}
             {isLoading ? <Skeleton className="h-64 w-full" /> : (
-                <div className="overflow-x-auto rounded-md border border-border bg-card">
+                <div className="max-h-[70vh] overflow-auto rounded-md border border-border bg-card">
                     <table className="w-full min-w-[1700px] text-sm">
-                        <thead className="bg-primary text-primary-foreground">
+                        <thead className="sticky top-0 z-20 bg-primary text-primary-foreground">
                             <tr>
-                                <th className="w-10 px-3 py-3">
+                                <th className="sticky left-0 z-30 w-10 bg-primary px-3 py-3">
                                     <Checkbox checked={rows.length > 0 && selected.size === rows.length}
                                               onCheckedChange={toggleAll} data-testid="row-select-all" />
                                 </th>
@@ -279,8 +279,8 @@ export default function FrequentContacts() {
                         </thead>
                         <tbody>
                             {rows.map((r, i) => (
-                                <tr key={r.id} className="border-b border-border/50 hover:bg-secondary/40">
-                                    <td className="px-3 py-2">
+                                <tr key={r.id} className="group border-b border-border/50 hover:bg-secondary/40">
+                                    <td className="sticky left-0 z-10 w-10 bg-card px-3 py-2 group-hover:bg-secondary/40">
                                         <Checkbox checked={selected.has(r.id)}
                                                   onCheckedChange={() => toggleRow(r.id)}
                                                   data-testid={`row-select-${r.id}`} />

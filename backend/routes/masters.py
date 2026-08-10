@@ -24,7 +24,7 @@ def _search_stage(q_text: Optional[str], fields: list[str]) -> dict:
     return {"$or": [{f: {"$regex": esc, "$options": "i"}} for f in fields]}
 
 
-# ---------- Customers ----------
+# ---------- Customers (Buyers) ----------
 class CustomerIn(BaseModel):
     name: str
     tin: Optional[str] = None
@@ -37,12 +37,28 @@ class CustomerIn(BaseModel):
     billing_address: Optional[str] = None
     shipping_address: Optional[str] = None
     payment_terms: str = "NET30"
+    # LHDN portal fields
+    company_id: Optional[str] = None
+    id_type: Optional[str] = "Business Registration Number"
+    sst_registration_number: Optional[str] = None
+    buyer_code: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    addr_line_0: Optional[str] = None
+    addr_line_1: Optional[str] = None
+    addr_line_2: Optional[str] = None
+    postal_zone: Optional[str] = None
+    enabled: Optional[bool] = True
 
 
 CUST_LIST_PROJ = {
     "name": 1, "tin": 1, "brn": 1, "email": 1, "phone": 1,
     "country": 1, "currency": 1, "credit_limit": 1, "payment_terms": 1,
     "billing_address": 1, "created_at": 1,
+    "company_id": 1, "id_type": 1, "sst_registration_number": 1,
+    "buyer_code": 1, "state": 1, "city": 1,
+    "addr_line_0": 1, "addr_line_1": 1, "addr_line_2": 1, "postal_zone": 1,
+    "enabled": 1, "updated_at": 1,
 }
 
 
@@ -58,6 +74,15 @@ async def list_customers(
     cur = (db.customers.find(query, CUST_LIST_PROJ)
                         .sort("created_at", -1).skip(skip).limit(limit))
     return [_s(c) async for c in cur]
+
+
+@router.get("/api/customers/{cid}")
+async def get_customer(cid: str, ctx=Depends(require_tenant)):
+    db = get_db()
+    doc = await db.customers.find_one({"_id": ObjectId(cid), "tenant_id": ctx["tenant_id"]})
+    if not doc:
+        raise HTTPException(404, "Not found")
+    return _s(doc)
 
 
 @router.post("/api/customers")
