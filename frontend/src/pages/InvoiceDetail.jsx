@@ -11,7 +11,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmtMoney } from "@/lib/format";
-import { ArrowLeft, Send, XCircle, Edit3, X } from "lucide-react";
+import { ArrowLeft, Send, XCircle, Edit3, X, Download, FileText } from "lucide-react";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // ------- Malaysian LHDN-approved invoice detail (Sections A–H) -------
 export default function InvoiceDetail() {
@@ -24,9 +28,23 @@ export default function InvoiceDetail() {
         refetchInterval: (q) => (q.state.data?.status === "submitting" ? 1500 : false),
     });
     const [cancelReason, setCancelReason] = useState("");
+    const [cancelCode, setCancelCode] = useState("1");
     const [cancelOpen, setCancelOpen] = useState(false);
     const [gateOpen, setGateOpen] = useState(false);
     const [gateAction, setGateAction] = useState(null);
+
+    const downloadPdf = async () => {
+        try {
+            const res = await api.get(`/invoices/${id}/pdf`, { responseType: "blob" });
+            const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${inv?.invoice_number || "invoice"}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success("PDF downloaded");
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
 
     if (isLoading || !inv) return <Skeleton className="h-96 w-full" />;
 
@@ -43,15 +61,20 @@ export default function InvoiceDetail() {
                 await api.post(`/invoices/${id}/submit`, { signing_session_id: sessionId });
                 toast.success("Invoice submitted to LHDN.");
             } else {
-                await api.post(`/invoices/${id}/cancel`,
-                    { signing_session_id: sessionId, reason: cancelReason });
-                toast.success("Invoice cancelled.");
-                setCancelOpen(false); setCancelReason("");
+                await api.post(`/invoices/cancel-batch`, {
+                    invoiceIds: [id],
+                    cancelCode: cancelCode,
+                    cancelReason: cancelReason,
+                });
+                toast.success(`Invoice cancelled (code ${cancelCode})`);
+                setCancelOpen(false); setCancelReason(""); setCancelCode("1");
             }
             qc.invalidateQueries({ queryKey: ["invoice", id] });
         } catch (e) { toast.error(formatApiError(e)); }
         finally { setGateOpen(false); setGateAction(null); }
     };
+
+    const canDownload = ["validated", "submitted", "cancelled"].includes(inv.status);
 
     const canSubmit = ["draft", "rejected"].includes(inv.status);
     const canCancel = ["validated", "submitted"].includes(inv.status);
@@ -86,6 +109,11 @@ export default function InvoiceDetail() {
                     {canCancel && (
                         <Button size="sm" variant="destructive" onClick={startCancel} data-testid="cancel-btn">
                             <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel / Void
+                        </Button>
+                    )}
+                    {canDownload && (
+                        <Button size="sm" variant="outline" onClick={downloadPdf} data-testid="download-pdf-btn">
+                            <Download className="mr-2 h-3.5 w-3.5" /> Download PDF
                         </Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => nav(-1)}>
@@ -260,21 +288,42 @@ export default function InvoiceDetail() {
                 <Summary l="Total Payable Amount" v={fmtMoney(inv.total)} highlight />
             </div>
 
-            {/* Cancel dialog */}
+            {/* Cancel dialog with LHDN reason code */}
             <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-                <DialogContent>
+                <DialogContent data-testid="cancel-dialog">
                     <DialogHeader><DialogTitle>Cancel / Void invoice</DialogTitle></DialogHeader>
-                    <Textarea
-                        placeholder="Reason for cancellation"
-                        value={cancelReason}
-                        onChange={(e) => setCancelReason(e.target.value)}
-                        data-testid="cancel-reason"
-                    />
+                    <div className="space-y-3">
+                        <div>
+                            <Label className="text-sm">Cancellation Code (LHDN)</Label>
+                            <Select value={cancelCode} onValueChange={setCancelCode}>
+                                <SelectTrigger data-testid="cancel-code"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">1 — Wrong buyer details</SelectItem>
+                                    <SelectItem value="2">2 — Wrong invoice details</SelectItem>
+                                    <SelectItem value="3">3 — Other (reason required)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {cancelCode === "3" && (
+                            <div>
+                                <Label className="text-sm">Reason <span className="text-destructive">*</span></Label>
+                                <Textarea
+                                    placeholder="Describe why this invoice is being cancelled"
+                                    value={cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    data-testid="cancel-reason"
+                                />
+                            </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                            LHDN allows cancellation within 72 hours of issuance. This action is irreversible.
+                        </div>
+                    </div>
                     <DialogFooter>
                         <Button
                             variant="destructive"
                             onClick={() => { setGateAction("cancel"); setGateOpen(true); }}
-                            disabled={!cancelReason.trim()}
+                            disabled={cancelCode === "3" && !cancelReason.trim()}
                             data-testid="cancel-confirm"
                         >
                             Continue to signing

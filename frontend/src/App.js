@@ -38,6 +38,7 @@ const IcsReports       = lazy(() => import("@/pages/ics/IcsReports"));
 const IcsBasicInfo     = lazy(() => import("@/pages/ics/IcsBasicInfo"));
 const FrequentContacts     = lazy(() => import("@/pages/ics/FrequentContacts"));
 const FrequentContactForm  = lazy(() => import("@/pages/ics/FrequentContactForm"));
+const PurchaseInvoices     = lazy(() => import("@/pages/ics/PurchaseInvoices"));
 const SupplierForm         = lazy(() => import("@/pages/SupplierForm"));
 
 function PageFallback() {
@@ -84,6 +85,7 @@ export default function App() {
                                     <Route path="frequent-contacts" element={<FrequentContacts />} />
                                     <Route path="frequent-contacts/new" element={<FrequentContactForm />} />
                                     <Route path="frequent-contacts/:id/edit" element={<FrequentContactForm />} />
+                                    <Route path="purchase-invoices" element={<PurchaseInvoices />} />
                                     <Route path="consolidated" element={<IcsConsolidated />} />
                                     <Route path="fiscal-document" element={<IcsFiscalDocument />} />
                                     <Route path="reports" element={<IcsReports />} />

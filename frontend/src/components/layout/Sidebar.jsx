@@ -33,6 +33,7 @@ const ICS_CHILDREN = [
     { to: "/ics", end: true, label: "Dashboard", icon: Wallet, testid: "ics-nav-dashboard" },
     { to: "/ics/my-transaction", label: "My Transaction", icon: FileArchive, testid: "ics-nav-transaction" },
     { to: "/ics/frequent-contacts", label: "Frequent Contacts", icon: Users, testid: "ics-nav-frequent-contacts" },
+    { to: "/ics/purchase-invoices", label: "Purchase Invoices", icon: Truck, testid: "ics-nav-purchase" },
     { to: "/ics/consolidated", label: "Consolidated Task", icon: FileArchive, testid: "ics-nav-consolidated" },
     { to: "/debit-notes", label: "Debit Note Management", icon: FileArchive, testid: "ics-nav-debit-notes" },
     { to: "/ics/fiscal-document", label: "My Fiscal Document", icon: FileArchive, testid: "ics-nav-fiscal" },

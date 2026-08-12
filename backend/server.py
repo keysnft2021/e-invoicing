@@ -27,6 +27,8 @@ from routes.bulk import router as bulk_router
 from routes.pdf_route import router as pdf_router
 from routes.api_clients import router as api_clients_router
 from routes.frequent_contacts import router as frequent_contacts_router
+from routes.lhdn_bridge import router as lhdn_bridge_router
+from routes.invoice_pdf import router as invoice_pdf_router
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -81,5 +83,6 @@ async def health():
 for r in [auth_router, companies_router, masters_router, invoices_router,
           dashboard_router, mytax_router, admin_router, audit_router,
           signing_router, gov_config_router, ics_router, bulk_router, pdf_router,
-          api_clients_router, frequent_contacts_router]:
+          api_clients_router, frequent_contacts_router,
+          lhdn_bridge_router, invoice_pdf_router]:
     app.include_router(r)

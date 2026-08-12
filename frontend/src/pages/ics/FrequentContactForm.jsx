@@ -11,10 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Check, X, ChevronLeft } from "lucide-react";
+import { Check, X, ChevronLeft, QrCode, Search } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { COUNTRIES, MY_STATES, citiesFor } from "@/lib/malaysia";
 import { MSIC_CODES } from "@/lib/msic";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 
 const ID_TYPES = [
     { v: "Business Registration Number", l: "Business Registration Number" },
@@ -58,6 +61,43 @@ export default function FrequentContactForm() {
     const { companies, currentId } = useCompany();
 
     const [form, setForm] = useState({ ...EMPTY });
+    const [lookupOpen, setLookupOpen] = useState(false);
+    const [lookupMode, setLookupMode] = useState("tin"); // tin | qr
+    const [lookupInput, setLookupInput] = useState("");
+    const [lookupBusy, setLookupBusy] = useState(false);
+
+    const runLookup = async () => {
+        if (!lookupInput.trim()) return toast.error("Enter a value");
+        setLookupBusy(true);
+        try {
+            const url = lookupMode === "tin" ? "/taxpayer/by-tin" : "/taxpayer/lookup-qr";
+            const body = lookupMode === "tin" ? { tin: lookupInput } : { qrCode: lookupInput };
+            const { data: p } = await api.post(url, body);
+            setForm((f) => ({
+                ...f,
+                tin: p.tin || f.tin,
+                id_type: p.id_type || f.id_type,
+                id_value: p.id_number || f.id_value,
+                name: p.name || f.name,
+                sst_registration_number: p.sst || f.sst_registration_number,
+                contact_number: p.contact_number || f.contact_number,
+                email: p.email || f.email,
+                msic_code: p.msic || f.msic_code,
+                msic_description: p.business_activity_description_en || f.msic_description,
+                business_activity: p.business_activity_description_en || f.business_activity,
+                country: p.country || f.country,
+                state: p.state || f.state,
+                city: p.city || f.city,
+                addr_line_0: p.address_line_0 || f.addr_line_0,
+                addr_line_1: p.address_line_1 || f.addr_line_1,
+                addr_line_2: p.address_line_2 || f.addr_line_2,
+                postal_zone: p.postal_zone || f.postal_zone,
+            }));
+            toast.success(`Loaded ${p.name} from LHDN`);
+            setLookupOpen(false); setLookupInput("");
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setLookupBusy(false); }
+    };
 
     const { data: existing } = useQuery({
         queryKey: ["frequent-contact", id],
@@ -122,6 +162,20 @@ export default function FrequentContactForm() {
                 </Link>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-medium">{title}</span>
+                {!isView && (
+                    <div className="ml-auto flex gap-2">
+                        <Button variant="outline" size="sm"
+                                onClick={() => { setLookupMode("tin"); setLookupOpen(true); }}
+                                data-testid="lookup-tin-btn">
+                            <Search className="mr-2 h-3.5 w-3.5" /> Lookup by TIN
+                        </Button>
+                        <Button variant="outline" size="sm"
+                                onClick={() => { setLookupMode("qr"); setLookupOpen(true); }}
+                                data-testid="lookup-qr-btn">
+                            <QrCode className="mr-2 h-3.5 w-3.5" /> Scan QR
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="rounded-md border border-border bg-card px-6 py-6">
@@ -291,12 +345,49 @@ export default function FrequentContactForm() {
                     </Button>
                 </div>
             </div>
+
+            <TaxpayerLookupDialog
+                open={lookupOpen}
+                onOpenChange={setLookupOpen}
+                mode={lookupMode}
+                value={lookupInput}
+                onChange={setLookupInput}
+                onRun={runLookup}
+                busy={lookupBusy}
+            />
         </div>
     );
 }
 
 function Req({ children }) {
     return <span>{children} <span className="text-destructive">*</span></span>;
+}
+
+// Lookup dialog rendered inside the parent component tree via portal.
+export function TaxpayerLookupDialog({ open, onOpenChange, mode, value, onChange, onRun, busy }) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent data-testid="taxpayer-lookup-dialog">
+                <DialogHeader>
+                    <DialogTitle>{mode === "tin" ? "Lookup taxpayer by TIN" : "Scan LHDN QR"}</DialogTitle>
+                    <DialogDescription>
+                        {mode === "tin"
+                            ? "Query LHDN for the party record and auto-fill this form."
+                            : "Paste the decoded QR string. Try 'tin:C24700902040' for the demo dataset."}
+                    </DialogDescription>
+                </DialogHeader>
+                <Input value={value} onChange={(e) => onChange(e.target.value)}
+                       placeholder={mode === "tin" ? "e.g. C24700902040" : "tin:C1234567890 or Base64…"}
+                       data-testid="lookup-input" />
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={onRun} disabled={busy} data-testid="lookup-run">
+                        {busy ? "Looking up…" : "Fetch & Fill"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }
 function TF({ l, children, full }) {
     return (
