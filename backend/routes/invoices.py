@@ -10,6 +10,7 @@ from deps import get_db, require_tenant
 from adapters import resolve_adapter
 from audit import audit
 from routes.signing import consume_signing_session
+from routes.lhdn_status import enrich_invoice
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -83,7 +84,7 @@ def _next_number(prefix="INV"):
 
 def _s(doc):
     doc["id"] = str(doc.pop("_id"))
-    return doc
+    return enrich_invoice(doc)
 
 
 def _append_event(doc, status, note, actor):

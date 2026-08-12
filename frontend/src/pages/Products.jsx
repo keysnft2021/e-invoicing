@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import PageHeader from "@/components/common/PageHeader";
 import CodeSelect from "@/components/common/CodeSelect";
+import BatchImportButton from "@/components/common/BatchImportButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -226,10 +227,8 @@ export default function Products() {
                         disabled={selected.size === 0} onClick={() => doToggle(false)}>
                     <Ban className="mr-2 h-3.5 w-3.5" /> Disable
                 </Button>
-                <Button variant="outline" size="sm" data-testid="op-import"
-                        onClick={() => toast.info("Batch import coming soon")}>
-                    <Upload className="mr-2 h-3.5 w-3.5" /> Batch Import
-                </Button>
+                <BatchImportButton entity="products"
+                    onDone={() => qc.invalidateQueries({ queryKey: ["products"] })} />
                 <Button variant="outline" size="sm" data-testid="op-export" onClick={doExport}>
                     <FileDown className="mr-2 h-3.5 w-3.5" /> Export
                 </Button>
